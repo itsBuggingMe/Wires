@@ -11,7 +11,7 @@ h1:focus
 
 a, .btn-link
 {
-    color: #0077cc;
+    color: #201c1c;
 }
 
 .btn-primary
@@ -81,6 +81,9 @@ a, .btn-link
     right: 0px;
     bottom: 0px;
     left: 0px;
+
+    /* Disable text highlighting and magnifying glass on iPhone/webkit */
+    -webkit-user-select: none;
 }
 
 

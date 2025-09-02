@@ -1,24 +1,22 @@
-﻿using Apos.Shapes;
-using Microsoft.JSInterop;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Wires.Core;
+using Apos.Shapes;
 
 namespace Wires;
 
 public class WiresGame : Game
 {
     private readonly GraphicsDeviceManager _graphics;
-    private readonly IJSRuntime _jsruntime;
 
-    public WiresGame(IJSRuntime jSRuntime)
+    public WiresGame()
     {
-        _jsruntime = jSRuntime;
         _graphics = new GraphicsDeviceManager(this)
         {
             GraphicsProfile = GraphicsProfile.HiDef,
         };
         Content.RootDirectory = "Content";
+        IsMouseVisible = true;
     }
 
     protected override void Initialize()
@@ -41,8 +39,6 @@ public class WiresGame : Game
             .Add(graphics)
             .Add(graphics.SpriteBatch)
             .Add(graphics.WhitePixel)
-
-            .Add(_jsruntime)
 
             .Add(this)
             ;

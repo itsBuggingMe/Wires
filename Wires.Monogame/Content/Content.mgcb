@@ -3,19 +3,13 @@
 
 /outputDir:bin/$(Platform)
 /intermediateDir:obj/$(Platform)
-/platform:BlazorGL
+/platform:DesktopGL
 /config:
 /profile:Reach
-/compress:True
+/compress:False
 
 #-------------------------------- References --------------------------------#
 
 
 #---------------------------------- Content ---------------------------------#
-
-#begin apos-shapes.fx
-/importer:EffectImporter
-/processor:EffectProcessor
-/processorParam:DebugMode=Auto
-/build:apos-shapes.fx
 
