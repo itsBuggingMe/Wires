@@ -1,6 +1,8 @@
 ﻿using Apos.Shapes;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Input;
 using System;
+using System.Collections;
 using System.Runtime.CompilerServices;
 using System.Xml;
 using Wires.Core;
@@ -14,6 +16,9 @@ public class MainSimulation : IScreen
     private ShapeBatch _sb;
     private Graphics _graphics;
     private Simulation _sim;
+    private Point? _dragStart;
+
+    private IEnumerator _calcSteps;
 
     public MainSimulation(Camera2D camera, ShapeBatch sb, Graphics graphics)
     {
@@ -21,12 +26,72 @@ public class MainSimulation : IScreen
         _camera = camera;
         _sb = sb;
         _sim = new Simulation();
+
+        _sim.Place(Blueprint.On, new Point(1, 4));
+        _sim.Place(Blueprint.Off, new Point(1, 8));
+        _sim.Place(Blueprint.Output, new Point(16, 10));
     }
 
     public void Update(Time gameTime)
     {
-        UpdateCamera();
+        if(_calcSteps is not null)
+        {
+            if(InputHelper.FallingEdge(Keys.Q) && !_calcSteps.MoveNext())
+            {
+                _calcSteps = null;
+            }
+        }
+        else if(InputHelper.RisingEdge(Keys.R))
+        {
+            _calcSteps = _sim.Step().GetEnumerator();
+        }
+        else
+        {
+            SimInteract();
+        }
 
+        UpdateCamera();
+    }
+
+    private void SimInteract()
+    {
+        Point tileOver = GetTileOver();
+        if (InputHelper.RisingEdge(Keys.E))
+        {
+            _sim.Place(Blueprint.Transisstor, tileOver);
+        }
+        if (InputHelper.RisingEdge(Keys.N))
+        {
+            _sim.Place(Blueprint.Not, tileOver);
+        }
+        if (InputHelper.RisingEdge(MouseButton.Left) && _sim.InRange(tileOver) && 
+            (_sim[tileOver].Kind is TileKind.Output or TileKind.Input || _sim.IdOfWireAt(tileOver) is int))
+        {
+            _dragStart = tileOver;
+        }
+
+        if (InputHelper.FallingEdge(MouseButton.Left)
+            && _dragStart is Point dragStart
+            && _sim.InRange(tileOver)
+            //&& _sim[tileOver].Kind is TileKind.Output or TileKind.Input
+            && tileOver != dragStart)
+        {
+            _sim.CreateWire(new Wire(dragStart, tileOver));
+            _calcSteps = _sim.Step().GetEnumerator();
+            _dragStart = null;
+        }
+
+        if (InputHelper.FallingEdge(MouseButton.Right) && _sim.IdOfWireAt(tileOver) is int id)
+        {
+            _sim.DestroyWire(id);
+            _calcSteps = _sim.Step().GetEnumerator();
+        }
+
+        if(_calcSteps is not null && !InputHelper.Down(Keys.Space))
+        {
+            while (_calcSteps.MoveNext());
+            _calcSteps = null;
+        }
     }
 
     public void Draw(Time gameTime)
@@ -36,28 +101,11 @@ public class MainSimulation : IScreen
         _sb.Begin(_camera.View, _camera.Projection);
         DrawGrid(new Vector2(-Step / 2), 100);
         Vector2 scale = new Vector2(Step);
-        foreach(ref var wire in _sim.Wires)
-        {
-            if (!wire.Exists)
-                continue;
-            Color color;
-            Color outline;
-            if (wire.IsInactive)
-            {
-                outline = Color.Gray;
-                color = Color.DarkGray;
-            }
-            else
-            {
-                (color, outline) = wire.Value == default ?
-                    (Color.Red, Color.DarkRed):
-                    (Color.Green, Color.DarkGreen);
-            }
-            _sb.DrawLine(wire.From.ToVector2() * scale, wire.To.ToVector2() * scale, 15, color, outline, 4);
-        }
+        _sim.Draw(_sb, scale, 10);
         _sb.End();
     }
 
+    private Point GetTileOver() => ((_camera.ScreenToWorld(InputHelper.MouseLocation.ToVector2()) - new Vector2(-Step / 2)) / new Vector2(Step)).ToPoint();
 
     private void UpdateCamera()
     {
@@ -65,7 +113,7 @@ public class MainSimulation : IScreen
         if (InputHelper.DeltaScroll != 0)
             _camera.Scale *= InputHelper.DeltaScroll > 0 ? ScrollScaleM : 1 / ScrollScaleM;
 
-        if (InputHelper.Down(MouseButton.Left))
+        if (InputHelper.Down(MouseButton.Left) && _dragStart is null)
             _camera.Position += (InputHelper.PrevMouseState.Position.ToVector2() - InputHelper.MouseLocation.ToVector2());
     }
 

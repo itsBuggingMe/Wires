@@ -10,10 +10,4 @@ public class ThrowHelper
     {
         throw new InvalidOperationException(message);
     }
-
-    [DoesNotReturn]
-    public static void Throw_ArgumentOutOfRangeException(string message)
-    {
-        throw new ArgumentOutOfRangeException(message);
-    }
 }
