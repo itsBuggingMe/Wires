@@ -7,14 +7,32 @@ using static Wires.Sim.Blueprint;
 
 namespace Wires.Sim;
 
-public class Blueprint(ImmutableArray<(Point Offset, TileKind Kind)> display, IntrinsicBlueprint descriptor = IntrinsicBlueprint.None)
+public class Blueprint
 {
-    public readonly ImmutableArray<(Point Offset, TileKind Kind)> Display = display;
+    public readonly ImmutableArray<(Point Offset, TileKind Kind)> Display;
 
-    public readonly ImmutableArray<Point> Outputs = display.Where(d => d.Kind is TileKind.Output).Select(d => d.Offset).ToImmutableArray();
-    public readonly ImmutableArray<Point> Inputs = display.Where(d => d.Kind is TileKind.Input).Select(d => d.Offset).ToImmutableArray();
+    public readonly ImmutableArray<Point> Outputs;
+    public readonly ImmutableArray<Point> Inputs;
     
-    public readonly IntrinsicBlueprint Descriptor = descriptor;
+    public readonly IntrinsicBlueprint Descriptor;
+    public readonly PowerState[] InputBuffer;
+    public readonly PowerState[] OutputBuffer;
+
+    private Blueprint(ImmutableArray<(Point Offset, TileKind Kind)> display, IntrinsicBlueprint descriptor = IntrinsicBlueprint.None)
+    {
+        Output = display.Where(d => d.Kind is TileKind.Output).Select(d => d.Offset).ToImmutableArray();
+        Inputs = display.Where(d => d.Kind is TileKind.Input).Select(d => d.Offset).ToImmutableArray();
+        InputBuffer = new PowerState[Inputs.Length];
+        OutputBuffer = new PowerState[OutputBuffer.Length];
+
+        Display = display;
+        Descriptor = descriptor;
+    }
+
+    public Blueprint(Simulation custom)
+    {
+        
+    }
 
     public static readonly Blueprint Transisstor = new([
         (new Point(0, 0), TileKind.Component),
