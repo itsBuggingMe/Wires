@@ -146,19 +146,20 @@ public class Simulation
             //_workList.PushRef() = new WorkItem(wireNode.To, state, componentId);
 
             // handle connecting wires
+            // this is simlar to recursive flood fill
             foreach (WireNode connection in WiresAt(wireNode.To))
             {
                 Wire connectedWire = _wires[connection.Id];
 
-                if (wire.LastVisitComponentId != -1)
+                if (connectedWire.LastVisitComponentId != -1)
                 {// this wire has been powered already
-                    if(wire.LastVisitComponentId == componentId)
+                    if(connectedWire.LastVisitComponentId == componentId)
                         continue;
-                    else
+                    else if(connectedWire.PowerState != state)
                         throw new Exception("Short Circuit!");
                 }
 
-                wire.PowerState = state;
+                connectedWire.PowerState = state;
 
                 // copy power state to other wires
                 VisitWire(connection, componentId, state);
