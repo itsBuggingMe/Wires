@@ -41,17 +41,18 @@ public class Simulation
 
     public IEnumerable Step()
     {
-        foreach(ref var wire in _wires.AsSpan())
+        foreach (ref var wire in _wires.AsSpan())
         {
             wire.PowerState = default;
+            wire.LastVisitComponentId = -1;
         }
 
         yield return null;
 
         int visitId = _nextVisitId++;
 
-        
-        for(int i = 0; i < _seedComponents.Count; i++)
+
+        for (int i = 0; i < _seedComponents.Count; i++)
         {
             int seedComponentId = _seedComponents[i];
             Component component = _components[seedComponentId];
@@ -78,20 +79,6 @@ public class Simulation
 
         while (_workList.TryPop(out WorkItem w))
         {
-            // handle connecting wires
-            foreach(WireNode connection in WiresAt(w.Position))
-            {
-                Wire wire = _wires[connection.Id];
-
-                if (wire.LastVisitId == visitId)
-                    continue; // we already handled this
-
-                wire.PowerState = w.State;
-
-                // copy power state to other wires
-                VisitWire(connection, w.ComponentId, w.State);
-            }
-
             // handle connecting input
             Tile tile = this[w.Position];
             if (tile.Kind == TileKind.Input)
@@ -99,39 +86,32 @@ public class Simulation
                 ref Component component = ref _components[tile.ComponentId];
                 if (component.LastVisitId == visitId)
                     continue;
-                int version;
 
-                switch(component.Blueprint.Descriptor)
+                switch (component.Blueprint.Descriptor)
                 {
                     case Blueprint.IntrinsicBlueprint.Output:
                         // todo, read outputs
                         break;
                     case Blueprint.IntrinsicBlueprint.Transisstor:
-                        if(PowerStateAt(component.GetInputPosition(1 /*base*/), out version) is { On: true } && version == visitId)
+                        if (PowerStateAt(component.GetInputPosition(1 /*base*/)) is { On: true })
                         {
                             // we got power - mark as visited
                             component.LastVisitId = visitId;
 
-                            PowerState collectorPowerState = PowerStateAt(component.GetInputPosition(0/*collector*/), out version);
-
-                            if (version != visitId)
-                                break;
+                            PowerState collectorPowerState = PowerStateAt(component.GetInputPosition(0/*collector*/));
 
                             // copy input state to output wires
                             foreach (WireNode connection in WiresAt(component.GetOutputPosition(0 /*emitter*/)))
                             {
                                 Wire wire = _wires[connection.Id];
-
-                                if (wire.LastVisitId == visitId)
-                                    throw new Exception("Short Circuit!");
 
                                 VisitWire(connection, tile.ComponentId, collectorPowerState);
                             }
                         }
                         break;
                     case Blueprint.IntrinsicBlueprint.Not:
-                        PowerState inputState = PowerStateAt(component.GetInputPosition(0 /*base*/), out version);
-                        if (inputState is { IsInactive: false } && version == visitId)
+                        PowerState inputState = PowerStateAt(component.GetInputPosition(0 /*base*/));
+                        if (inputState is { IsInactive: false })
                         {
                             // we got power - mark as visited
                             component.LastVisitId = visitId;
@@ -140,9 +120,6 @@ public class Simulation
                             foreach (WireNode connection in WiresAt(component.GetOutputPosition(0 /*emitter*/)))
                             {
                                 Wire wire = _wires[connection.Id];
-
-                                if (wire.LastVisitId == visitId)
-                                    throw new Exception("Short Circuit!");
 
                                 VisitWire(connection, tile.ComponentId, inputState.On ? new PowerState(0, true) : new PowerState(1, true));
                             }
@@ -157,13 +134,39 @@ public class Simulation
 
         void VisitWire(WireNode wireNode, int componentId, PowerState state)
         {
+            if(state.IsInactive)
+            {
+                return;
+            }
+
             ref Wire wire = ref _wires[wireNode.Id];
             wire.LastVisitComponentId = componentId;
-            wire.LastVisitId = visitId;
             wire.PowerState = state;
-            _workList.PushRef() = new WorkItem(wireNode.To, state, componentId);
+
+            //_workList.PushRef() = new WorkItem(wireNode.To, state, componentId);
+
+            // handle connecting wires
+            foreach (WireNode connection in WiresAt(wireNode.To))
+            {
+                Wire connectedWire = _wires[connection.Id];
+
+                if (wire.LastVisitComponentId != -1)
+                {// this wire has been powered already
+                    if(wire.LastVisitComponentId == componentId)
+                        continue;
+                    else
+                        throw new Exception("Short Circuit!");
+                }
+
+                wire.PowerState = state;
+
+                // copy power state to other wires
+                VisitWire(connection, componentId, state);
+            }
         }
     }
+
+
 
     readonly record struct WorkItem(Point Position, PowerState State, int ComponentId);
 
@@ -190,16 +193,14 @@ public class Simulation
         return default;
     }
 
-    private PowerState PowerStateAt(Point position, out int version)
+    private PowerState PowerStateAt(Point position)
     {
         foreach(var wireId in WiresAt(position))
         {
             ref var wire = ref _wires[wireId.Id];
-            version = wire.LastVisitId;
             return wire.PowerState;
         }
 
-        version = -1;
         return default;
     }
 
