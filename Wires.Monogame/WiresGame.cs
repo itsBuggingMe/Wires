@@ -14,9 +14,12 @@ public class WiresGame : Game
         _graphics = new GraphicsDeviceManager(this)
         {
             GraphicsProfile = GraphicsProfile.HiDef,
+            //PreferredBackBufferHeight = 720,
+            //PreferredBackBufferWidth = 1280,
         };
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
+
     }
 
     protected override void Initialize()
@@ -33,7 +36,6 @@ public class WiresGame : Game
             .Add(_graphics.GraphicsDevice)
 
             .Add(new Camera2D(_graphics.GraphicsDevice))
-            .Add(new ShapeBatch(_graphics.GraphicsDevice, Content))
             .Add(new Time())
 
             .Add(graphics)

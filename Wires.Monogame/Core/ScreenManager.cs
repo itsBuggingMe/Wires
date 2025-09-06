@@ -19,7 +19,7 @@ public class ScreenManager : IGameComponent, IUpdateable, IDrawable
 
     private Func<ServiceContainer, IScreen> _firstFactory;
     private Game _game;
-    private IScreen _current;
+    private IScreen? _current;
     private ServiceContainer _services;
     private Time _shared;
 
@@ -37,10 +37,10 @@ public class ScreenManager : IGameComponent, IUpdateable, IDrawable
     public bool Visible => true;
 
 #pragma warning disable CS0067 // Event never used
-    public event EventHandler<EventArgs> EnabledChanged;
-    public event EventHandler<EventArgs> UpdateOrderChanged;
-    public event EventHandler<EventArgs> DrawOrderChanged;
-    public event EventHandler<EventArgs> VisibleChanged;
+    public event EventHandler<EventArgs>? EnabledChanged;
+    public event EventHandler<EventArgs>? UpdateOrderChanged;
+    public event EventHandler<EventArgs>? DrawOrderChanged;
+    public event EventHandler<EventArgs>? VisibleChanged;
 #pragma warning restore CS0067 // Event never used
 
     public static ScreenManager Create<T>(ServiceContainer services, Game game)
@@ -117,7 +117,7 @@ public class ScreenManager : IGameComponent, IUpdateable, IDrawable
         public void Update(Time gameTime) { }
         public void Draw(Time gameTime) { }
 
-        public void OnEnter(IScreen previous, object args) { }
-        public object OnExit() => null;
+        public void OnEnter(IScreen previous, object? args) { }
+        public object? OnExit() => null;
     }
 }

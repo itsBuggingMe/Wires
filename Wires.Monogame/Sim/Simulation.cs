@@ -1,11 +1,9 @@
 ﻿using System;
 using Microsoft.Xna.Framework;
-using System.Runtime.CompilerServices;
 using Wires.Core;
 using Apos.Shapes;
-using System.IO;
 using System.Collections;
-using System.Runtime.InteropServices;
+using System.Collections.Generic;
 
 namespace Wires.Sim;
 
@@ -19,8 +17,8 @@ public class Simulation
     public ref Tile this[int x, int y] => ref _tiles[x + y * Width];
     public ref Tile this[Point p] => ref this[p.X, p.Y];
 
-    private FastStack<WorkItem> _workList = new FastStack<WorkItem>(4);
-    private FastStack<int> _seedComponents = new FastStack<int>(4);
+    private Queue<WorkItem> _workList = new Queue<WorkItem>(4);
+    private HashSet<int> _seedComponents = [];
 
     // coord -> wire
     private ShortSparseSet<FastStack<WireNode>> _wireMap = new();
@@ -30,7 +28,9 @@ public class Simulation
 
     private int _nextVisitId = 1;
 
-    public Simulation(int width = 100, int height = 100)
+    private Dictionary<Point, PowerState> _outputs = [];
+
+    public Simulation(int width = 24, int height = 24)
     {
         _ = checked((ushort)width * (ushort)height);
 
@@ -39,11 +39,37 @@ public class Simulation
         Height = height;
     }
 
-    public IEnumerable Step()
+    public int InputCount
     {
+        get
+        {
+            int count = 0;
+            foreach(var comp in _seedComponents)
+                if (_components[comp].Blueprint.Descriptor == Blueprint.IntrinsicBlueprint.Input)
+                    count++;
+            return count;
+        }
+    }
+
+    public int OutputCount
+    {
+        get
+        {
+            int count = 0;
+            foreach (var comp in _components.AsSpan())
+                if (comp is { Blueprint.Descriptor: Blueprint.IntrinsicBlueprint.Output, Exists: true })
+                    count++;
+            return count;
+        }
+    }
+
+    public IEnumerable StepEnumerator(PowerState[] inputs, PowerState[] outputs)
+    {
+        _outputs.Clear();
+
         foreach (ref var wire in _wires.AsSpan())
         {
-            wire.PowerState = default;
+            wire.PowerState = PowerState.OffState;
             wire.LastVisitComponentId = -1;
         }
 
@@ -52,22 +78,32 @@ public class Simulation
         int visitId = _nextVisitId++;
 
 
-        for (int i = 0; i < _seedComponents.Count; i++)
+        foreach(var seedComponentId in _seedComponents)
         {
-            int seedComponentId = _seedComponents[i];
             Component component = _components[seedComponentId];
+
             switch (component.Blueprint.Descriptor)
             {
                 case Blueprint.IntrinsicBlueprint.On:
+                    _outputs.TryAdd(component.GetOutputPosition(0), PowerState.OnState);
                     foreach (var wireNode in WiresAt(component.GetOutputPosition(0)))
                     {
-                        VisitWire(wireNode, seedComponentId, new PowerState(1, true));
+                        VisitWire(wireNode, seedComponentId, PowerState.OnState);
                     }
                     break;
                 case Blueprint.IntrinsicBlueprint.Off:
+                    _outputs.TryAdd(component.GetOutputPosition(0), PowerState.OffState);
                     foreach (var wireNode in WiresAt(component.GetOutputPosition(0)))
                     {
-                        VisitWire(wireNode, seedComponentId, new PowerState(0, true));
+                        VisitWire(wireNode, seedComponentId, PowerState.OffState);
+                    }
+                    break;
+                case Blueprint.IntrinsicBlueprint.Input:
+                    PowerState inputPower = inputs[component.InputOutputId];
+                    _outputs.TryAdd(component.GetOutputPosition(0), inputPower);
+                    foreach (var wireNode in WiresAt(component.GetOutputPosition(0)))
+                    {
+                        VisitWire(wireNode, seedComponentId, inputPower);
                     }
                     break;
                 default:
@@ -77,56 +113,72 @@ public class Simulation
         }
         // do work
 
-        while (_workList.TryPop(out WorkItem w))
+        while (_workList.TryDequeue(out WorkItem w))
         {
             // handle connecting input
             Tile tile = this[w.Position];
-            if (tile.Kind == TileKind.Input)
+            ref Component component = ref _components[tile.ComponentId];
+
+            switch (component.Blueprint.Descriptor)
             {
-                ref Component component = ref _components[tile.ComponentId];
-                if (component.LastVisitId == visitId)
-                    continue;
+                case Blueprint.IntrinsicBlueprint.Output:
+                    // we dont always read outputs
+                    if ((uint)component.InputOutputId < (uint)outputs.Length)
+                        outputs[component.InputOutputId] = w.State;
+                    break;
+                case Blueprint.IntrinsicBlueprint.NAND:
+                    component.LastVisitId = visitId;
 
-                switch (component.Blueprint.Descriptor)
-                {
-                    case Blueprint.IntrinsicBlueprint.Output:
-                        // todo, read outputs
-                        break;
-                    case Blueprint.IntrinsicBlueprint.Transisstor:
-                        if (PowerStateAt(component.GetInputPosition(1 /*base*/)) is { On: true })
+                    PowerState a = PowerStateAt(component.GetInputPosition(0));
+                    PowerState b = PowerStateAt(component.GetInputPosition(1));
+
+                    PowerState outputPowerState = !(a.On && b.On) ? PowerState.OnState : PowerState.OffState; // nand!
+
+                    _outputs.TryAdd(component.GetOutputPosition(0), outputPowerState);
+
+
+                    foreach (WireNode connection in WiresAt(component.GetOutputPosition(0 /*emitter*/)))
+                    {
+                        VisitWire(connection, tile.ComponentId, outputPowerState);
+                    }
+                    break;
+                //case Blueprint.IntrinsicBlueprint.Not:
+                //    PowerState inputState = PowerStateAt(component.GetInputPosition(0));
+                //    // we got power - mark as visited
+                //    component.LastVisitId = visitId;
+                //
+                //    var state = inputState.On ? PowerState.OffState : PowerState.OnState;
+                //    _outputs.TryAdd(component.GetOutputPosition(0), state);
+                //
+                //    // copy input state to output wires
+                //    foreach (WireNode connection in WiresAt(component.GetOutputPosition(0 /*emitter*/)))
+                //    {
+                //        Wire wire = _wires[connection.Id];
+                //
+                //        VisitWire(connection, tile.ComponentId, state);
+                //    }
+                //    break;
+                case Blueprint.IntrinsicBlueprint.None:
+                    if (component.Blueprint.Custom is null)
+                        goto default;
+                    // custom
+                    for(int i = 0; i < component.Blueprint.Inputs.Length; i++)
+                        component.Blueprint.InputBuffer[i] = PowerStateAt(component.GetInputPosition(i));
+
+                    component.Blueprint.StepStateful();
+
+                    for (int i = 0; i < component.Blueprint.Outputs.Length; i++)
+                    {
+                        PowerState power = component.Blueprint.OutputBuffer[i];
+                        Point outputPosition = component.GetOutputPosition(i);
+
+                        foreach (WireNode connection in WiresAt(outputPosition))
                         {
-                            // we got power - mark as visited
-                            component.LastVisitId = visitId;
-
-                            PowerState collectorPowerState = PowerStateAt(component.GetInputPosition(0/*collector*/));
-
-                            // copy input state to output wires
-                            foreach (WireNode connection in WiresAt(component.GetOutputPosition(0 /*emitter*/)))
-                            {
-                                Wire wire = _wires[connection.Id];
-
-                                VisitWire(connection, tile.ComponentId, collectorPowerState);
-                            }
+                            VisitWire(connection, tile.ComponentId, power);
                         }
-                        break;
-                    case Blueprint.IntrinsicBlueprint.Not:
-                        PowerState inputState = PowerStateAt(component.GetInputPosition(0 /*base*/));
-                        if (inputState is { IsInactive: false })
-                        {
-                            // we got power - mark as visited
-                            component.LastVisitId = visitId;
-
-                            // copy input state to output wires
-                            foreach (WireNode connection in WiresAt(component.GetOutputPosition(0 /*emitter*/)))
-                            {
-                                Wire wire = _wires[connection.Id];
-
-                                VisitWire(connection, tile.ComponentId, inputState.On ? new PowerState(0, true) : new PowerState(1, true));
-                            }
-                        }
-                        break;
-                    default: throw new NotImplementedException();
-                }
+                    }
+                    break;
+                default: throw new NotImplementedException();
             }
 
             yield return null;
@@ -134,16 +186,12 @@ public class Simulation
 
         void VisitWire(WireNode wireNode, int componentId, PowerState state)
         {
-            if(state.IsInactive)
-            {
-                return;
-            }
-
             ref Wire wire = ref _wires[wireNode.Id];
             wire.LastVisitComponentId = componentId;
             wire.PowerState = state;
 
-            //_workList.PushRef() = new WorkItem(wireNode.To, state, componentId);
+            if (this[wireNode.To].Kind is TileKind.Input)
+                _workList.Enqueue(new WorkItem(wireNode.To, state, componentId));
 
             // handle connecting wires
             // this is simlar to recursive flood fill
@@ -181,6 +229,8 @@ public class Simulation
         return Span<WireNode>.Empty;
     }
 
+    public bool HasWiresAt(Point position) => WiresAt(position).Length != 0;
+
     public int? IdOfWireAt(Point position)
     {
         ushort index = (ushort)(position.X + position.Y * Width);
@@ -194,7 +244,7 @@ public class Simulation
         return default;
     }
 
-    private PowerState PowerStateAt(Point position)
+    public PowerState PowerStateAt(Point position)
     {
         foreach(var wireId in WiresAt(position))
         {
@@ -202,10 +252,15 @@ public class Simulation
             return wire.PowerState;
         }
 
+        if(_outputs.TryGetValue(position, out var v))
+        {
+            return v;
+        }
+
         return default;
     }
 
-    public int Place(Blueprint blueprint, Point position)
+    public int Place(Blueprint blueprint, Point position, bool allowDelete = true, int inputOutputId = 0)
     {
         foreach(var item in blueprint.Display)
         {
@@ -216,12 +271,13 @@ public class Simulation
             }
         }
 
-        _components.Create(out int id) = new() { Blueprint = blueprint, Position = position };
+        _components.Create(out int id) = new() { Blueprint = blueprint, Position = position, Exists = true, AllowDelete = allowDelete, InputOutputId = inputOutputId };
 
         if(blueprint.Descriptor == Blueprint.IntrinsicBlueprint.On ||
-            blueprint.Descriptor == Blueprint.IntrinsicBlueprint.Off)
+            blueprint.Descriptor == Blueprint.IntrinsicBlueprint.Off ||
+            blueprint.Descriptor == Blueprint.IntrinsicBlueprint.Input)
         {
-            _seedComponents.PushRef() = id;
+            _seedComponents.Add(id);
         }
 
         foreach (var item in blueprint.Display)
@@ -249,6 +305,32 @@ public class Simulation
         _wireMap[bIndex].LazyInit().Remove(new WireNode() { Id = wireId, To = w.A });
     }
 
+    public int DestroyComponent(Point position)
+    {
+        Tile t = this[position];
+        if (t.Kind is not TileKind.Output and not TileKind.Input and not TileKind.Component)
+            return -1;
+
+        Component component = _components[t.ComponentId];
+
+        if (!component.AllowDelete)
+            return -1;
+
+        int componentId = t.ComponentId;
+
+        foreach (var item in component.Blueprint.Display)
+        {
+            var pos = item.Offset + position;
+            this[pos.X, pos.Y] = new() { ComponentId = -1, Kind = TileKind.Nothing };
+        }
+
+        _seedComponents.Remove(componentId);
+
+        _components.Destroy(componentId);
+
+        return componentId;
+    }
+
     public bool InRange(Point pos)
     {
         return (uint)pos.X < (uint)Width && (uint)pos.Y < (uint)Height;
@@ -256,6 +338,9 @@ public class Simulation
 
     public int CreateWire(Wire w)
     {
+        if (w.A == w.B)
+            return default;
+
         _wires.Create(out int id) = w;
 
         ushort aIndex = checked((ushort)(w.A.X + w.A.Y * Width));
@@ -267,45 +352,83 @@ public class Simulation
         return id;
     }
 
-    public void Draw(ShapeBatch sb, Vector2 scale, float wireRad)
+    public void Draw(Graphics g, float scale)
     {
-        Vector2 halfTileOffset = scale * 0.5f;
+        ShapeBatch sb = g.ShapeBatch;
+
+        if(InputHelper.Down(Microsoft.Xna.Framework.Input.Keys.P))
+        {
+            for (int i = 0; i < Width; i++)
+            {
+                for (int j = 0; j < Height; j++)
+                {
+                    if (this[i, j].Kind == TileKind.Nothing)
+                        continue;
+                    g.DrawStringCentered(this[i, j].Kind.ToString(), new Vector2(i, j) * scale, 0.7f);
+                }
+            }
+        }
+
+        DrawGrid(sb, new Vector2(scale) * -0.5f, scale);
+
+        Vector2 halfTileOffset = new Vector2(scale) * 0.5f;
 
         foreach (ref var component in _components.AsSpan())
         {
-            Point pos = component.Position;
-            foreach ((Point offset, TileKind kind) in component.Blueprint.Display.AsSpan())
-            {
-                Point tilePos = pos + offset;
-                Vector2 mapPos = tilePos.ToVector2() * scale;
+            if (!component.Exists)
+                continue;
 
-                switch (kind)
-                {
-                    case TileKind.Input: sb.FillEquilateralTriangle(mapPos, wireRad * 0.7f, new Color(14, 92, 181), 0, MathHelper.PiOver2); break;
-                    case TileKind.Output: sb.FillRectangle(mapPos - new Vector2(wireRad), new(wireRad * 2), Color.Orange); break;
-                    case TileKind.Component: sb.FillRectangle(mapPos - halfTileOffset, scale, new Color(181, 14, 59), 8); break;
-                }
-            }
+            component.Blueprint.Draw(g, this, component.Position, scale, Constants.WireRad);
         }
 
         foreach (ref var wire in _wires.AsSpan())
         {
             if (!wire.Exists)
                 continue;
-            Color color;
-            Color outline;
-            if (wire.PowerState.IsInactive)
-            {
-                outline = Color.Gray;
-                color = Color.DarkGray;
-            }
-            else
-            {
-                (color, outline) = wire.PowerState.On ?
-                    (Color.Green, Color.DarkGreen) :
-                    (Color.Red, Color.DarkRed);
-            }
-            sb.DrawLine(wire.A.ToVector2() * scale, wire.B.ToVector2() * scale, wireRad, color, outline, 4);
+            var (color, outline) = Constants.GetWireColor(wire.PowerState);
+
+            var a = wire.A.ToVector2() * scale;
+            var b = wire.B.ToVector2() * scale;
+
+            sb.DrawLine(a, 
+                        b, Constants.WireRad, color, outline, 4);
+
+            sb.DrawCircle(a, Constants.WireRad * 1.42f, color, outline, 4);
+            sb.DrawCircle(a, Constants.WireRad * 0.5f, new Color(64, 64, 64), outline, 0);
+
+
+            sb.DrawCircle(b, Constants.WireRad * 1.42f, color, outline, 4);
+            sb.DrawCircle(b, Constants.WireRad * 0.5f, new Color(64, 64, 64), outline, 0);
+        }
+    }
+
+    private void DrawGrid(ShapeBatch sb, Vector2 origin, float step)
+    {
+        const float LineWidth = 1f;
+
+        float gridSizeX = Width * step;
+        float gridSizeY = Height * step;
+
+        for (int i = 0; i <= Width; i++)
+        {
+            float x = origin.X + i * step;
+            sb.FillLine(
+                new Vector2(x, origin.Y),
+                new Vector2(x, origin.Y + gridSizeY),
+                LineWidth,
+                Constants.Accent
+            );
+        }
+
+        for (int j = 0; j <= Height; j++)
+        {
+            float y = origin.Y + j * step;
+            sb.FillLine(
+                new Vector2(origin.X, y),
+                new Vector2(origin.X + gridSizeX, y),
+                LineWidth,
+                Constants.Accent
+            );
         }
     }
 }

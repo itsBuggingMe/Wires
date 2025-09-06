@@ -9,13 +9,16 @@ public class Camera2D
     {
         get
         {
-            Vector3 origin = new Vector3(NormalizedOrigin.X * _graphicsDevice.Viewport.Width,
-                             NormalizedOrigin.Y * _graphicsDevice.Viewport.Height, 0);
+            Vector3 origin = new Vector3(
+                NormalizedOrigin.X * _graphicsDevice.Viewport.Width,
+                NormalizedOrigin.Y * _graphicsDevice.Viewport.Height,
+                0);
 
             Matrix view =
+                Matrix.CreateTranslation(-origin) *
                 Matrix.CreateScale(Scale.X, Scale.Y, 1) *
                 Matrix.CreateRotationZ(-Rotation) *
-                Matrix.CreateTranslation(-Position.X, -Position.Y, 0) *
+                Matrix.CreateTranslation(Position.X, Position.Y, 0) * 
                 Matrix.CreateTranslation(origin);
 
             return view;

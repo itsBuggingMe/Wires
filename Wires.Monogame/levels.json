@@ -1,0 +1,390 @@
+[
+  {
+    "GridWidth": 9,
+    "GridHeight": 9,
+    "Name": "NOT",
+    "Components": [
+      {
+        "BlueprintName": "Input",
+        "X": 0,
+        "Y": 4,
+        "AllowDelete": false,
+        "InputOutputId": 0
+      },
+      {
+        "BlueprintName": "Output",
+        "X": 8,
+        "Y": 4,
+        "AllowDelete": false,
+        "InputOutputId": 0
+      }
+    ],
+    "ComponentTiles": [
+      {
+        "X": -1,
+        "Y": 0,
+        "TileKind": "Input"
+      },
+      {
+        "X": 0,
+        "Y": 0,
+        "TileKind": "Component"
+      },
+      {
+        "X": 1,
+        "Y": 0,
+        "TileKind": "Output"
+      }
+    ],
+    "TestCases": [
+      {
+        "Inputs": [ true ],
+        "Outputs": [ false ]
+      },
+      {
+        "Inputs": [ false ],
+        "Outputs": [ true ]
+      }
+    ]
+  },
+  {
+    "GridWidth": 9,
+    "GridHeight": 9,
+    "Name": "AND",
+    "Components": [
+      {
+        "BlueprintName": "Input",
+        "X": 0,
+        "Y": 0,
+        "AllowDelete": false,
+        "InputOutputId": 0
+      },
+      {
+        "BlueprintName": "Input",
+        "X": 0,
+        "Y": 8,
+        "AllowDelete": false,
+        "InputOutputId": 1
+      },
+      {
+        "BlueprintName": "Output",
+        "X": 8,
+        "Y": 4,
+        "AllowDelete": false,
+        "InputOutputId": 0
+      }
+    ],
+    "ComponentTiles": [
+      {
+        "X": -1,
+        "Y": 0,
+        "TileKind": "Input"
+      },
+      {
+        "X": 0,
+        "Y": -1,
+        "TileKind": "Input"
+      },
+      {
+        "X": 0,
+        "Y": 0,
+        "TileKind": "Component"
+      },
+      {
+        "X": 1,
+        "Y": 0,
+        "TileKind": "Output"
+      }
+    ],
+    "TestCases": [
+      {
+        "Inputs": [ true, true ],
+        "Outputs": [ true ]
+      },
+      {
+        "Inputs": [ false, true ],
+        "Outputs": [ false ]
+      },
+      {
+        "Inputs": [ true, false ],
+        "Outputs": [ false ]
+      },
+      {
+        "Inputs": [ false, false ],
+        "Outputs": [ false ]
+      }
+    ]
+  },
+  {
+    "GridWidth": 9,
+    "GridHeight": 9,
+    "Name": "OR",
+    "Components": [
+      {
+        "BlueprintName": "Input",
+        "X": 0,
+        "Y": 0,
+        "AllowDelete": false,
+        "InputOutputId": 0
+      },
+      {
+        "BlueprintName": "Input",
+        "X": 0,
+        "Y": 8,
+        "AllowDelete": false,
+        "InputOutputId": 1
+      },
+      {
+        "BlueprintName": "Output",
+        "X": 8,
+        "Y": 4,
+        "AllowDelete": false,
+        "InputOutputId": 0
+      }
+    ],
+    "ComponentTiles": [
+      {
+        "X": -1,
+        "Y": 0,
+        "TileKind": "Input"
+      },
+      {
+        "X": 0,
+        "Y": -1,
+        "TileKind": "Input"
+      },
+      {
+        "X": 0,
+        "Y": 0,
+        "TileKind": "Component"
+      },
+      {
+        "X": 1,
+        "Y": 0,
+        "TileKind": "Output"
+      }
+    ],
+    "TestCases": [
+      {
+        "Inputs": [ true, true ],
+        "Outputs": [ true ]
+      },
+      {
+        "Inputs": [ false, true ],
+        "Outputs": [ true ]
+      },
+      {
+        "Inputs": [ true, false ],
+        "Outputs": [ true ]
+      },
+      {
+        "Inputs": [ false, false ],
+        "Outputs": [ false ]
+      }
+    ]
+  },
+  {
+    "GridWidth": 9,
+    "GridHeight": 9,
+    "Name": "NOR",
+    "Components": [
+      {
+        "BlueprintName": "Input",
+        "X": 0,
+        "Y": 0,
+        "AllowDelete": false,
+        "InputOutputId": 0
+      },
+      {
+        "BlueprintName": "Input",
+        "X": 0,
+        "Y": 8,
+        "AllowDelete": false,
+        "InputOutputId": 1
+      },
+      {
+        "BlueprintName": "Output",
+        "X": 8,
+        "Y": 4,
+        "AllowDelete": false,
+        "InputOutputId": 0
+      }
+    ],
+    "ComponentTiles": [
+      {
+        "X": -1,
+        "Y": 0,
+        "TileKind": "Input"
+      },
+      {
+        "X": 0,
+        "Y": -1,
+        "TileKind": "Input"
+      },
+      {
+        "X": 0,
+        "Y": 0,
+        "TileKind": "Component"
+      },
+      {
+        "X": 1,
+        "Y": 0,
+        "TileKind": "Output"
+      }
+    ],
+    "TestCases": [
+      {
+        "Inputs": [ true, true ],
+        "Outputs": [ false ]
+      },
+      {
+        "Inputs": [ false, true ],
+        "Outputs": [ false ]
+      },
+      {
+        "Inputs": [ true, false ],
+        "Outputs": [ false ]
+      },
+      {
+        "Inputs": [ false, false ],
+        "Outputs": [ true ]
+      }
+    ]
+  },
+  {
+    "GridWidth": 9,
+    "GridHeight": 9,
+    "Name": "XOR",
+    "Components": [
+      {
+        "BlueprintName": "Input",
+        "X": 0,
+        "Y": 0,
+        "AllowDelete": false,
+        "InputOutputId": 0
+      },
+      {
+        "BlueprintName": "Input",
+        "X": 0,
+        "Y": 8,
+        "AllowDelete": false,
+        "InputOutputId": 1
+      },
+      {
+        "BlueprintName": "Output",
+        "X": 8,
+        "Y": 4,
+        "AllowDelete": false,
+        "InputOutputId": 0
+      }
+    ],
+    "ComponentTiles": [
+      {
+        "X": -1,
+        "Y": 0,
+        "TileKind": "Input"
+      },
+      {
+        "X": 0,
+        "Y": -1,
+        "TileKind": "Input"
+      },
+      {
+        "X": 0,
+        "Y": 0,
+        "TileKind": "Component"
+      },
+      {
+        "X": 1,
+        "Y": 0,
+        "TileKind": "Output"
+      }
+    ],
+    "TestCases": [
+      {
+        "Inputs": [ true, true ],
+        "Outputs": [ false ]
+      },
+      {
+        "Inputs": [ false, true ],
+        "Outputs": [ true ]
+      },
+      {
+        "Inputs": [ true, false ],
+        "Outputs": [ true ]
+      },
+      {
+        "Inputs": [ false, false ],
+        "Outputs": [ false ]
+      }
+    ]
+  },
+  {
+    "GridWidth": 9,
+    "GridHeight": 9,
+    "Name": "XNOR",
+    "Components": [
+      {
+        "BlueprintName": "Input",
+        "X": 0,
+        "Y": 0,
+        "AllowDelete": false,
+        "InputOutputId": 0
+      },
+      {
+        "BlueprintName": "Input",
+        "X": 0,
+        "Y": 8,
+        "AllowDelete": false,
+        "InputOutputId": 1
+      },
+      {
+        "BlueprintName": "Output",
+        "X": 8,
+        "Y": 4,
+        "AllowDelete": false,
+        "InputOutputId": 0
+      }
+    ],
+    "ComponentTiles": [
+      {
+        "X": -1,
+        "Y": 0,
+        "TileKind": "Input"
+      },
+      {
+        "X": 0,
+        "Y": -1,
+        "TileKind": "Input"
+      },
+      {
+        "X": 0,
+        "Y": 0,
+        "TileKind": "Component"
+      },
+      {
+        "X": 1,
+        "Y": 0,
+        "TileKind": "Output"
+      }
+    ],
+    "TestCases": [
+      {
+        "Inputs": [ true, true ],
+        "Outputs": [ true ]
+      },
+      {
+        "Inputs": [ false, true ],
+        "Outputs": [ false ]
+      },
+      {
+        "Inputs": [ true, false ],
+        "Outputs": [ false ]
+      },
+      {
+        "Inputs": [ false, false ],
+        "Outputs": [ true ]
+      }
+    ]
+  }
+]

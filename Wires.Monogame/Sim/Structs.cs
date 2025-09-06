@@ -25,12 +25,14 @@ public struct WireNode
     public int Id;
 }
 
-public record struct PowerState(byte Values, bool IsActive)
+public record struct PowerState(byte Values)
 {
-    public readonly bool On => IsActive && Values != 0;
-    public readonly bool Off => IsActive && Values == 0;
-    public readonly bool IsInactive => !IsActive;
+    public readonly bool On => Values != 0;
+    public readonly bool Off => Values == 0;
     public readonly bool OnAt(int index) => (Values & (1 << index)) != 0;
+
+    public static readonly PowerState OnState = new PowerState(1);
+    public static readonly PowerState OffState = new PowerState(0);
 }
 
 public enum TileKind : ushort
@@ -52,9 +54,12 @@ public struct Component : IFreeListId
     public Point Position;
     public Blueprint Blueprint;
     public int LastVisitId;
+    public int InputOutputId;
+    public bool AllowDelete;
+
+    public bool Exists { get; set; }
 
     public int FreeNext { get => Position.X; set => Position.X = value; }
-    public bool Exists { set { } }
 
     public Point GetOutputPosition(int index) => Blueprint.Outputs[index] + Position;
     public Point GetInputPosition(int index) => Blueprint.Inputs[index] + Position;
