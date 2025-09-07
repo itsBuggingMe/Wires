@@ -607,12 +607,12 @@ public class Simulation
             if (InRange(wire.A))
             {
                 var k = this[point].Kind;
-                if (k is TileKind.Input)
+                if (k is TileKind.Output)
                 {
                     sb.DrawEquilateralTriangle(a, Constants.WireRad * 0.35f, thatGrayColor, outline, 0);
                     return;
                 }
-                else if(k is TileKind.Output)
+                else if(k is TileKind.Input)
                 {
                     Vector2 size = new(Constants.WireRad * 0.85f);
                     sb.DrawRectangle(a - size * 0.5f, size, thatGrayColor, outline, 0);

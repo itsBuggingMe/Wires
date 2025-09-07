@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Wires.Core;
 
 namespace Wires.Sim;
@@ -38,6 +39,7 @@ public class Blueprint
     private PowerState[] _outputBuffer;
     public PowerState DelayValue;
     public readonly int Rotation;
+    private readonly bool _isSpecialSprite;
 
     public ref PowerState InputBuffer(int index) => ref MemoryHelper.GetValueOrResize(ref _inputBuffer, index);
     public ref PowerState OutputBuffer(int index) => ref MemoryHelper.GetValueOrResize(ref _outputBuffer, index);
@@ -57,6 +59,8 @@ public class Blueprint
             _inputBuffer = new PowerState[Inputs.Length];
             _outputBuffer = new PowerState[Outputs.Length];
         }
+
+        _isSpecialSprite = Text is "AND" or "NAND" or "NOR" or "NOT" or "OR" or "XNOR" or "XOR";
     }
 
     private static Point Rotate(Point p, int rot) => rot switch
@@ -130,7 +134,8 @@ public class Blueprint
     {
         Color? ssColor = isShortCircuit ? Color.DarkGoldenrod : null;
 
-        foreach ((Point offset, TileKind kind) in _data.Displays[(rotationOverride ?? Rotation) & 3].AsSpan())
+        int rotation = (rotationOverride ?? Rotation) & 3;
+        foreach ((Point offset, TileKind kind) in _data.Displays[rotation].AsSpan())
         {
             Point tilePos = pos + offset;
             Vector2 mapPos = tilePos.ToVector2() * scale;
@@ -139,27 +144,48 @@ public class Blueprint
 
             switch (kind)
             {
-                case TileKind.Input:
-                    g.ShapeBatch.FillEquilateralTriangle(mapPos, wireRad * 0.7f, new Color(14, 92, 181) * opacity, 0, MathHelper.PiOver2);
+                case TileKind.Output:
+                    g.ShapeBatch.FillEquilateralTriangle(mapPos, wireRad * 0.7f, new Color(14, 92, 181) * opacity, 0, -MathHelper.PiOver2);
                     g.ShapeBatch.DrawCircle(mapPos, wireRad * 0.5f, color, outline);
                     break;
-                case TileKind.Output:
+                case TileKind.Input:
                     g.ShapeBatch.FillRectangle(mapPos - new Vector2(wireRad), new(wireRad * 2), Color.Orange * opacity);
                     g.ShapeBatch.DrawCircle(mapPos, wireRad * 0.5f, color, outline);
                     break;
-                case TileKind.Component:
-                    g.ShapeBatch.FillRectangle(mapPos - new Vector2(scale) * 0.5f, new(scale), ssColor ?? new Color(181, 14, 59) * opacity, 8);
+                case TileKind.Component when !_isSpecialSprite:
+                    g.ShapeBatch.DrawRectangle(mapPos - new Vector2(scale) * 0.5f, new(scale), ssColor ?? new Color(181, 14, 59) * opacity, new(156, 3, 46), 3, 8);
                     break;
             }
         }
 
-        g.DrawStringCentered(Text, pos.ToVector2() * scale);
+        Vector2 textOffset = default;
+        float rotationAngle = rotation * MathHelper.PiOver2;
+        if(_isSpecialSprite)
+        {
+            var texture = g.Content.Load<Texture2D>(Text);
+            g.SpriteBatch.Draw(texture, pos.ToVector2() * scale, null, Color.White, rotationAngle, texture.Bounds.Size.ToVector2() * 0.5f, 0.34609375f * 0.5f, SpriteEffects.None, 0);
+
+            textOffset = Vector2.UnitX * (Text switch
+            {
+                "NAND" => -7,
+                "NOT" => -11,
+                "OR" => 9,
+                "XOR" => 15,
+                "XNOR" => 7.5f,
+                // nor default
+                _ => default,
+            });
+        }
+
+        Vector2 size = g.Font.MeasureString(Text);
+        g.SpriteBatchText.DrawString(g.Font, Text, pos.ToVector2() * scale
+            , Color.White, rotation * MathHelper.PiOver2, size * 0.5f - textOffset, 1, default, default);
     }
 
     public static readonly Blueprint NAND = new([
         (new Point(0, 0), TileKind.Component),
-        (new Point(-1, 0), TileKind.Input),
-        (new Point(0, -1), TileKind.Input),
+        (new Point(-1, -1), TileKind.Input),
+        (new Point(-1, 1), TileKind.Input),
         (new Point(1, 0), TileKind.Output),
     ], "NAND", IntrinsicBlueprint.NAND);
 

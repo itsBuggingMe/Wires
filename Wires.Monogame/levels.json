@@ -77,11 +77,11 @@
     "ComponentTiles": [
       {
         "X": -1,
-        "Y": 0,
+        "Y": 1,
         "TileKind": "Input"
       },
       {
-        "X": 0,
+        "X": -1,
         "Y": -1,
         "TileKind": "Input"
       },
@@ -145,11 +145,11 @@
     "ComponentTiles": [
       {
         "X": -1,
-        "Y": 0,
+        "Y": 1,
         "TileKind": "Input"
       },
       {
-        "X": 0,
+        "X": -1,
         "Y": -1,
         "TileKind": "Input"
       },
@@ -213,11 +213,11 @@
     "ComponentTiles": [
       {
         "X": -1,
-        "Y": 0,
+        "Y": 1,
         "TileKind": "Input"
       },
       {
-        "X": 0,
+        "X": -1,
         "Y": -1,
         "TileKind": "Input"
       },
@@ -281,11 +281,11 @@
     "ComponentTiles": [
       {
         "X": -1,
-        "Y": 0,
+        "Y": 1,
         "TileKind": "Input"
       },
       {
-        "X": 0,
+        "X": -1,
         "Y": -1,
         "TileKind": "Input"
       },
@@ -349,11 +349,11 @@
     "ComponentTiles": [
       {
         "X": -1,
-        "Y": 0,
+        "Y": 1,
         "TileKind": "Input"
       },
       {
-        "X": 0,
+        "X": -1,
         "Y": -1,
         "TileKind": "Input"
       },

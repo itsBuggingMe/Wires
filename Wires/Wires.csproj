@@ -33,11 +33,10 @@
     <Compile Include="..\Wires.Monogame\States\*">
       <Link>States\%(RecursiveDir)%(FileName)%(Extension)</Link>
     </Compile>
-    <Compile Include="Pages\Index.razor.cs"/>
-    <Compile Include="Constants.cs"/>
-    <Compile Include="WiresGame.cs"/>
-    <Compile Include="MainSimulation.cs"/>
-    <Compile Include="Program.cs"/>
+    <Compile Include="Pages\Index.razor.cs" />
+    <Compile Include="Constants.cs" />
+    <Compile Include="WiresGame.cs" />
+    <Compile Include="Program.cs" />
   </ItemGroup>
 
   <ItemGroup>

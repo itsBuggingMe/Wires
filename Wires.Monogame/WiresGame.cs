@@ -21,6 +21,12 @@ public class WiresGame : Game
         }
 #endif
         ;
+        _graphics.PreparingDeviceSettings += (o, e) =>
+        {
+            _graphics.PreferMultiSampling = true;
+            e.GraphicsDeviceInformation.PresentationParameters.MultiSampleCount = 8;
+        };
+
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
 

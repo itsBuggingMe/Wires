@@ -28,7 +28,7 @@ internal static class Levels
                     {
                         "Input" => Blueprint.Input,
                         "Output" => Blueprint.Output,
-                        _ => existingEntries.FirstOrDefault(m => m.Name == component.BlueprintName).Blueprint ?? 
+                        _ => existingEntries.FirstOrDefault(m => m.Name == component.BlueprintName)?.Blueprint ?? 
                             throw new System.Exception($"Could not find blueprint of name: {component.BlueprintName}")
                     }, new(component.X, component.Y), component.Rotation, component.AllowDelete, component.InputOutputId ?? 0);
                 }
@@ -54,7 +54,7 @@ internal static class Levels
 
     private const string LevelsJson =
         """
-        [
+                [
           {
             "GridWidth": 9,
             "GridHeight": 9,
@@ -133,11 +133,11 @@ internal static class Levels
             "ComponentTiles": [
               {
                 "X": -1,
-                "Y": 0,
+                "Y": 1,
                 "TileKind": "Input"
               },
               {
-                "X": 0,
+                "X": -1,
                 "Y": -1,
                 "TileKind": "Input"
               },
@@ -201,11 +201,11 @@ internal static class Levels
             "ComponentTiles": [
               {
                 "X": -1,
-                "Y": 0,
+                "Y": 1,
                 "TileKind": "Input"
               },
               {
-                "X": 0,
+                "X": -1,
                 "Y": -1,
                 "TileKind": "Input"
               },
@@ -269,11 +269,11 @@ internal static class Levels
             "ComponentTiles": [
               {
                 "X": -1,
-                "Y": 0,
+                "Y": 1,
                 "TileKind": "Input"
               },
               {
-                "X": 0,
+                "X": -1,
                 "Y": -1,
                 "TileKind": "Input"
               },
@@ -337,11 +337,11 @@ internal static class Levels
             "ComponentTiles": [
               {
                 "X": -1,
-                "Y": 0,
+                "Y": 1,
                 "TileKind": "Input"
               },
               {
-                "X": 0,
+                "X": -1,
                 "Y": -1,
                 "TileKind": "Input"
               },
@@ -405,11 +405,11 @@ internal static class Levels
             "ComponentTiles": [
               {
                 "X": -1,
-                "Y": 0,
+                "Y": 1,
                 "TileKind": "Input"
               },
               {
-                "X": 0,
+                "X": -1,
                 "Y": -1,
                 "TileKind": "Input"
               },
@@ -1200,7 +1200,7 @@ internal static class Levels
               },
               {
                 "Inputs": [ false, false, false, true, false, false, false, true, false ],
-                "Outputs": [ false, false, false, true, false ]
+                "Outputs": [ false, false, true, false, false ]
               },
               {
                 "Inputs": [ true, false, true, false, true, true, false, true, true ],
@@ -1208,113 +1208,113 @@ internal static class Levels
               }
             ]
           },
-                  {
-          "GridWidth": 128,
-          "GridHeight": 128,
-          "Name": "SND",
-          "Components": [
-          ],
-          "ComponentTiles": [
-          ],
-          "TestCases": [
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            },
-            {
-              "Inputs": [],
-              "Outputs": []
-            }
-          ]
-        }
+          {
+            "GridWidth": 128,
+            "GridHeight": 128,
+            "Name": "SND",
+            "Components": [
+            ],
+            "ComponentTiles": [
+            ],
+            "TestCases": [
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              },
+              {
+                "Inputs": [],
+                "Outputs": []
+              }
+            ]
+          }
         ]
         """;
 }

@@ -71,6 +71,7 @@ public class MainSimulation : IScreen
 
     public void Update(Time gameTime)
     {
+        //_camera.Scale = Vector2.One * 1 / 0.34609375f;
         _testCaseTimer += gameTime.FrameDeltaTime;
 
         if(_testCaseTimer > 30)
@@ -171,8 +172,9 @@ public class MainSimulation : IScreen
 
         if (_dragStartUi is null)
         {
+#if !BLAZORGL
             Mouse.SetCursor(MouseCursor.Arrow);
-
+#endif
             Rectangle rightBar = new Rectangle(sidebar.Right, sidebar.Top, 0, sidebar.Height);
             rightBar.Inflate(6, 6);
 
@@ -188,9 +190,11 @@ public class MainSimulation : IScreen
                 _ when EnumerateEntries().Any(e => e.Rectangle.Contains(InputHelper.MouseLocation)) => (DragReason.Component, default),
                 _ => default,
             };
+#if !BLAZORGL
 
             if (cursor is not null)
                 Mouse.SetCursor(cursor);
+#endif
 
             if (_dragReason != default && MouseButton.Left.RisingEdge())
             {
@@ -275,11 +279,11 @@ public class MainSimulation : IScreen
         }
 
         if (MouseButton.Left.FallingEdge()
-            && _dragStartWorld is Point dragStart
-            && sim.InRange(tileOver)
-            && tileOver != dragStart)
+            && _dragStartWorld is Point dragStart)
         {
-            if(_simDragReason == SimDragReason.PlaceWire && sim[tileOver] is not { Kind: TileKind.Component })
+            if (sim.InRange(tileOver)
+                && tileOver != dragStart
+                && _simDragReason == SimDragReason.PlaceWire && sim[tileOver] is not { Kind: TileKind.Component })
             {
                 sim.CreateWire(new Wire(dragStart, tileOver));
                 ResetSimulation();
@@ -316,7 +320,8 @@ public class MainSimulation : IScreen
         _graphics.GraphicsDevice.Clear(Constants.Background);
 
         _sb.Begin(_camera.View, _camera.Projection);
-        _graphics.SpriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: _camera.View);
+        _graphics.SpriteBatch.Begin(transformMatrix: _camera.View);
+        _graphics.SpriteBatchText.Begin(samplerState: SamplerState.PointClamp, transformMatrix: _camera.View);
 
         if (CurrentEntry is { } entry)
         {
@@ -344,10 +349,11 @@ public class MainSimulation : IScreen
 
         _sb.End();
         _graphics.SpriteBatch.End();
+        _graphics.SpriteBatchText.End();
 
         // ui
         _sb.Begin();
-        _graphics.SpriteBatch.Begin(samplerState: SamplerState.PointClamp);
+        _graphics.SpriteBatchText.Begin(samplerState: SamplerState.PointClamp);
 
         var sidebar = Sidebar;
         if (_selectedSim < 0)
@@ -358,7 +364,7 @@ public class MainSimulation : IScreen
         DrawUi();
 
         _sb.End();
-        _graphics.SpriteBatch.End();
+        _graphics.SpriteBatchText.End();
     }
 
     private Vector2 _windowSize;
