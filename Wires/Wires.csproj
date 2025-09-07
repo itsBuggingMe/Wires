@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+﻿<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
 
   <PropertyGroup>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -8,7 +8,8 @@
     <RootNamespace>Wires</RootNamespace>
     <AssemblyName>Wires</AssemblyName>
     <DefineConstants>$(DefineConstants);BLAZORGL</DefineConstants>
-	<KniPlatform>BlazorGL</KniPlatform>
+	  <KniPlatform>BlazorGL</KniPlatform>
+    <LangVersion>Latest</LangVersion>
   </PropertyGroup>
   
   <PropertyGroup>
@@ -23,22 +24,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Core\Camera2D.cs" />
-    <Compile Include="Constants.cs" />
-    <Compile Include="Core\Graphics.cs" />
-    <Compile Include="Core\InputHelper.cs" />
-    <Compile Include="Core\IScreen.cs" />
-    <Compile Include="Core\ScreenManager.cs" />
-    <Compile Include="Core\ServiceContainer.cs" />
-    <Compile Include="Core\ThrowHelper.cs" />
-    <Compile Include="Core\Time.cs" />
-    <Compile Include="Core\FastStack.cs" />
-    <Compile Include="MainSimulation.cs" />
-    <Compile Include="Pages\Index.razor.cs" />
-    <Compile Include="Program.cs" />
-    <Compile Include="Sim\Simulation.cs" />
-    <Compile Include="Sim\Structs.cs" />
-    <Compile Include="WiresGame.cs" />
+    <Compile Include="..\Wires.Monogame\Core\*">
+      <Link>Core\%(RecursiveDir)%(FileName)%(Extension)</Link>
+    </Compile>
+    <Compile Include="..\Wires.Monogame\Sim\*">
+      <Link>Sim\%(RecursiveDir)%(FileName)%(Extension)</Link>
+    </Compile>
+    <Compile Include="*.cs"/>
   </ItemGroup>
 
   <ItemGroup>

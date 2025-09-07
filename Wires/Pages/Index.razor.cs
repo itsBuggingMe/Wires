@@ -23,7 +23,7 @@ public partial class Index
         // init game
         if (_game == null)
         {
-            _game = new WiresGame(JsRuntime);
+            _game = new WiresGame();
             _game.Run();
         }
 

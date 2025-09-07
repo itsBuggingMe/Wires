@@ -31,8 +31,6 @@ public class MainSimulation : IScreen
     private int _currentTestCaseIndex;
     private float _testCaseTimer;
 
-    private IEnumerator? _calcSteps;
-
     private readonly List<ComponentEntry> _components = [];
     private int _selectedSim = -1;
 
@@ -47,6 +45,7 @@ public class MainSimulation : IScreen
         _sb = graphics.ShapeBatch;
 
         _components.Add(new(Blueprint.NAND));
+        _components.Add(new(Blueprint.Delay));
         //_components.Add(new(Blueprint.On));
         //_components.Add(new(Blueprint.Off));
 
@@ -74,17 +73,7 @@ public class MainSimulation : IScreen
             }
         }
 
-        if (_calcSteps is not null)
-        {
-            if(InputHelper.FallingEdge(Keys.Q) && !_calcSteps.MoveNext())
-            {
-                _calcSteps = null;
-            }
-        }
-        else
-        {
-            UpdateInputs();
-        }
+        UpdateInputs();
     }
 
     private void UpdateInputs()
@@ -106,10 +95,10 @@ public class MainSimulation : IScreen
     {
         if(CurrentEntry is { TestCases: { } cases, Blueprint: { } blueprint })
         {
-            cases.Set(_currentTestCaseIndex, blueprint.InputBuffer, _outputTempBuffer);
+            cases.Set(_currentTestCaseIndex, blueprint.InputBufferRaw, _outputTempBuffer);
             blueprint.StepStateful();
 
-            if(!blueprint.OutputBuffer.AsSpan().SequenceEqual(_outputTempBuffer.AsSpan(0, blueprint.OutputBuffer.Length)))
+            if(!blueprint.OutputBufferRaw.AsSpan().SequenceEqual(_outputTempBuffer.AsSpan(0, blueprint.OutputBufferRaw.Length)))
             {
                 _playState = PlayButtonState.Play;
             }
@@ -133,7 +122,7 @@ public class MainSimulation : IScreen
                     if(CurrentEntry is { World: Simulation sim } componentEntry)
                     {
                         sim.Place(toAdd.Blueprint, GetTileOver());
-                        componentEntry.Blueprint.StepStateful();
+                        componentEntry.Blueprint.Reset();
                     }
 
                     _selectedComponentToPlace = -1;
@@ -185,6 +174,11 @@ public class MainSimulation : IScreen
                 if(_dragReason == DragReason.Component)
                 {
                     _selectedComponentToPlace = EnumerateEntries().TakeWhile(e => !e.Rectangle.Contains(InputHelper.MouseLocation)).Count();
+
+                    if(_selectedComponentToPlace == _selectedSim)
+                    {
+                        _dragStartUi = null;
+                    }
                 }
 
                 return true;
@@ -255,7 +249,7 @@ public class MainSimulation : IScreen
         {
             input = true;
             sim.CreateWire(new Wire(dragStart, tileOver));
-            _calcSteps = sim.StepEnumerator(blueprint.InputBuffer, blueprint.OutputBuffer).GetEnumerator();
+            blueprint.Reset();
             _dragStartWorld = null;
         }
 
@@ -265,18 +259,12 @@ public class MainSimulation : IScreen
             if(sim.IdOfWireAt(tileOver) is int id)
             {
                 sim.DestroyWire(id);
-                _calcSteps = sim.StepEnumerator(blueprint.InputBuffer, blueprint.OutputBuffer).GetEnumerator();
+                blueprint.Reset();
             }
             else if (sim[tileOver].Kind is not TileKind.Nothing)
             {
                 sim.DestroyComponent(tileOver);
             }
-        }
-
-        if(_calcSteps is not null && !InputHelper.Down(Keys.Space))
-        {
-            while (_calcSteps.MoveNext()) ;
-            _calcSteps = null;
         }
 
         return input;

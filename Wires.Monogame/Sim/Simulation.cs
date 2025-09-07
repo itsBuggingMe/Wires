@@ -4,6 +4,7 @@ using Wires.Core;
 using Apos.Shapes;
 using System.Collections;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 
 namespace Wires.Sim;
 
@@ -19,6 +20,9 @@ public class Simulation
 
     private Queue<WorkItem> _workList = new Queue<WorkItem>(4);
     private HashSet<int> _seedComponents = [];
+    private HashSet<int> _delayComponentIds = new(4);
+
+    public int DelayCount => _delayComponentIds.Count;
 
     // coord -> wire
     private ShortSparseSet<FastStack<WireNode>> _wireMap = new();
@@ -63,7 +67,7 @@ public class Simulation
         }
     }
 
-    public IEnumerable StepEnumerator(PowerState[] inputs, PowerState[] outputs)
+    public IEnumerable StepEnumerator(Blueprint blueprint)
     {
         _outputs.Clear();
 
@@ -81,36 +85,44 @@ public class Simulation
         foreach(var seedComponentId in _seedComponents)
         {
             Component component = _components[seedComponentId];
-
-            switch (component.Blueprint.Descriptor)
+            Point firstOutputPos = component.GetOutputPosition(0);
+            PowerState powerToApply = component.Blueprint.Descriptor switch
             {
-                case Blueprint.IntrinsicBlueprint.On:
-                    _outputs.TryAdd(component.GetOutputPosition(0), PowerState.OnState);
-                    foreach (var wireNode in WiresAt(component.GetOutputPosition(0)))
-                    {
-                        VisitWire(wireNode, seedComponentId, PowerState.OnState);
-                    }
-                    break;
-                case Blueprint.IntrinsicBlueprint.Off:
-                    _outputs.TryAdd(component.GetOutputPosition(0), PowerState.OffState);
-                    foreach (var wireNode in WiresAt(component.GetOutputPosition(0)))
-                    {
-                        VisitWire(wireNode, seedComponentId, PowerState.OffState);
-                    }
-                    break;
-                case Blueprint.IntrinsicBlueprint.Input:
-                    PowerState inputPower = inputs[component.InputOutputId];
-                    _outputs.TryAdd(component.GetOutputPosition(0), inputPower);
-                    foreach (var wireNode in WiresAt(component.GetOutputPosition(0)))
-                    {
-                        VisitWire(wireNode, seedComponentId, inputPower);
-                    }
-                    break;
-                default:
-                    throw new Exception("Not a seed component");
+                Blueprint.IntrinsicBlueprint.On => PowerState.OnState,
+                Blueprint.IntrinsicBlueprint.Off => PowerState.OffState,
+                Blueprint.IntrinsicBlueprint.Input => blueprint.InputBuffer(component.InputOutputId),
+                Blueprint.IntrinsicBlueprint.Delay => component.Blueprint.DelayValue,
+                _ => throw new Exception("Not a seed component")
+            };
+
+            _outputs.TryAdd(firstOutputPos, powerToApply);
+
+            foreach (var wireNode in WiresAt(firstOutputPos))
+            {
+                VisitWire(wireNode, seedComponentId, powerToApply);
             }
+
             yield return null;
         }
+
+        // also add components
+        int id = 0;
+        foreach(var component in _components.AsSpan())
+        {
+            if (!component.Exists)
+                continue;
+            foreach(var offset in component.Blueprint.Inputs)
+            {
+                if (ConnectedToAnOutput(component.Position))
+                    continue;
+                //_workList.Enqueue(new WorkItem(component.Position + offset, PowerState.OnState, id));
+                break;
+                // only need to update 1 input
+            }
+
+            id++;
+        }
+
         // do work
 
         while (_workList.TryDequeue(out WorkItem w))
@@ -123,8 +135,7 @@ public class Simulation
             {
                 case Blueprint.IntrinsicBlueprint.Output:
                     // we dont always read outputs
-                    if ((uint)component.InputOutputId < (uint)outputs.Length)
-                        outputs[component.InputOutputId] = w.State;
+                    blueprint.OutputBuffer(component.InputOutputId) = w.State;
                     break;
                 case Blueprint.IntrinsicBlueprint.NAND:
                     component.LastVisitId = visitId;
@@ -137,7 +148,7 @@ public class Simulation
                     _outputs.TryAdd(component.GetOutputPosition(0), outputPowerState);
 
 
-                    foreach (WireNode connection in WiresAt(component.GetOutputPosition(0 /*emitter*/)))
+                    foreach (WireNode connection in WiresAt(component.GetOutputPosition(0)))
                     {
                         VisitWire(connection, tile.ComponentId, outputPowerState);
                     }
@@ -158,19 +169,34 @@ public class Simulation
                 //        VisitWire(connection, tile.ComponentId, state);
                 //    }
                 //    break;
+                case Blueprint.IntrinsicBlueprint.Delay:
+                    // read delay value
+                    component.LastVisitId = visitId;
+
+                    PowerState outputDelayValue = component.Blueprint.DelayValue;
+
+                    _outputs.TryAdd(component.GetOutputPosition(0), outputDelayValue);
+
+
+                    foreach (WireNode connection in WiresAt(component.GetOutputPosition(0)))
+                    {
+                        VisitWire(connection, tile.ComponentId, outputDelayValue);
+                    }
+                    break;
                 case Blueprint.IntrinsicBlueprint.None:
                     if (component.Blueprint.Custom is null)
                         goto default;
                     // custom
                     for(int i = 0; i < component.Blueprint.Inputs.Length; i++)
-                        component.Blueprint.InputBuffer[i] = PowerStateAt(component.GetInputPosition(i));
+                        component.Blueprint.InputBuffer(i) = PowerStateAt(component.GetInputPosition(i));
 
                     component.Blueprint.StepStateful();
 
                     for (int i = 0; i < component.Blueprint.Outputs.Length; i++)
                     {
-                        PowerState power = component.Blueprint.OutputBuffer[i];
+                        PowerState power = component.Blueprint.OutputBuffer(i);
                         Point outputPosition = component.GetOutputPosition(i);
+                        _outputs.TryAdd(outputPosition, power);
 
                         foreach (WireNode connection in WiresAt(outputPosition))
                         {
@@ -182,6 +208,15 @@ public class Simulation
             }
 
             yield return null;
+        }
+
+        // before returning, update inputs of delay components
+
+        Point inputOffset = Blueprint.Delay.Inputs[0];
+        foreach(var delayComponentId in _delayComponentIds)
+        {
+            Component delayComponent = _components[delayComponentId];
+            delayComponent.Blueprint.DelayValue = PowerStateAt(delayComponent.Position + inputOffset);
         }
 
         void VisitWire(WireNode wireNode, int componentId, PowerState state)
@@ -213,9 +248,45 @@ public class Simulation
                 VisitWire(connection, componentId, state);
             }
         }
+
+        bool ConnectedToAnOutput(Point connection)
+        {
+            foreach(var wireNode in WiresAt(connection))
+            {
+                Wire wire = _wires[wireNode.Id];
+                if (wire.LastVisitComponentId == -2)
+                    continue;// mark visited with -2
+                wire.LastVisitComponentId = -2;
+
+                if (this[wireNode.To].Kind is TileKind.Output)
+                    return true;
+
+                if (ConnectedToAnOutput(wireNode.To))
+                    return true;
+            }
+
+            return false;
+        }
     }
 
+    public void ClearAllDelayValues()
+    {
+        foreach(var component in _components.AsSpan())
+        {
+            if (!component.Exists)
+                continue;
 
+            var descript = component.Blueprint.Descriptor;
+            if (descript == Blueprint.IntrinsicBlueprint.Delay)
+            {
+                component.Blueprint.DelayValue = PowerState.OffState;
+            }
+            else if(descript == Blueprint.IntrinsicBlueprint.None)
+            {
+                component.Blueprint.Custom!.ClearAllDelayValues();
+            }
+        }
+    }
 
     readonly record struct WorkItem(Point Position, PowerState State, int ComponentId);
 
@@ -262,6 +333,8 @@ public class Simulation
 
     public int Place(Blueprint blueprint, Point position, bool allowDelete = true, int inputOutputId = 0)
     {
+        blueprint = blueprint.Clone();
+
         foreach(var item in blueprint.Display)
         {
             var pos = item.Offset + position;
@@ -273,11 +346,17 @@ public class Simulation
 
         _components.Create(out int id) = new() { Blueprint = blueprint, Position = position, Exists = true, AllowDelete = allowDelete, InputOutputId = inputOutputId };
 
-        if(blueprint.Descriptor == Blueprint.IntrinsicBlueprint.On ||
-            blueprint.Descriptor == Blueprint.IntrinsicBlueprint.Off ||
-            blueprint.Descriptor == Blueprint.IntrinsicBlueprint.Input)
+        if(blueprint.Descriptor is Blueprint.IntrinsicBlueprint.On or 
+            Blueprint.IntrinsicBlueprint.Off or 
+            Blueprint.IntrinsicBlueprint.Input or 
+            Blueprint.IntrinsicBlueprint.Delay)
         {
             _seedComponents.Add(id);
+        }
+
+        if(blueprint.Descriptor is Blueprint.IntrinsicBlueprint.Delay)
+        {
+            _delayComponentIds.Add(id);
         }
 
         foreach (var item in blueprint.Display)
@@ -320,11 +399,13 @@ public class Simulation
 
         foreach (var item in component.Blueprint.Display)
         {
-            var pos = item.Offset + position;
-            this[pos.X, pos.Y] = new() { ComponentId = -1, Kind = TileKind.Nothing };
+            var pos = item.Offset + component.Position;
+            ref var x = ref this[pos.X, pos.Y];
+            x = new() { ComponentId = -1, Kind = TileKind.Nothing };
         }
 
         _seedComponents.Remove(componentId);
+        _delayComponentIds.Remove(componentId);
 
         _components.Destroy(componentId);
 
