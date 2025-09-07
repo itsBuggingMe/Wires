@@ -1,7 +1,10 @@
 ﻿namespace Wires.Sim;
 
-internal record struct ComponentEntry(Blueprint Blueprint, TestCases? TestCases = null)
+internal class ComponentEntry(Blueprint blueprint, TestCases? testCases = null)
 {
-    public Simulation? Custom => Blueprint.Custom;
-    public string Name = Blueprint.Text;
+    public Simulation? Custom => blueprint.Custom;
+    public Blueprint Blueprint => blueprint;
+    public TestCases? TestCases => testCases;
+    public string Name = blueprint.Text;
+    public int TestCaseIndex { get; set; }
 }

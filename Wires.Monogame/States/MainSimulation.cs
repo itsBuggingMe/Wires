@@ -21,6 +21,7 @@ public class MainSimulation : IScreen
     private Point? _dragStartWorld;
     private Point? _dragStartUi;
     private DragReason _dragReason;
+    private int _wireDiagnalValue;
     private int _selectedComponentToPlace = -1;
 
     private ShortCircuitDescription? _shortCircuitErr;
@@ -32,7 +33,15 @@ public class MainSimulation : IScreen
 
     private enum PlayButtonState : byte { Play, Pause }
     private PlayButtonState _playState;
-    private int _currentTestCaseIndex;
+    private int CurrentTestCaseIndex
+    { 
+        get => CurrentEntry?.TestCaseIndex ?? 0;
+        set
+        {
+            if(CurrentEntry is { } entry)
+                entry.TestCaseIndex = value;
+        }
+    }
     private float _testCaseTimer;
 
     private readonly List<ComponentEntry> _components = [];
@@ -41,6 +50,8 @@ public class MainSimulation : IScreen
     private PowerState[] _outputTempBuffer = new PowerState[128];
 
     private ComponentEntry? CurrentEntry => _selectedSim == -1 ? null : _components[_selectedSim];
+
+    private int _rotation;
 
     public MainSimulation(Camera2D camera, Graphics graphics)
     {
@@ -65,10 +76,10 @@ public class MainSimulation : IScreen
         if(_testCaseTimer > 30)
         {
             _testCaseTimer -= 30;
-            if(_playState == PlayButtonState.Pause && CurrentEntry.HasValue)
+            if(_playState == PlayButtonState.Pause && CurrentEntry is not null)
             {
-                _currentTestCaseIndex++;
-                if (_currentTestCaseIndex >= CurrentEntry.Value.TestCases!.Length)
+                CurrentTestCaseIndex++;
+                if (CurrentTestCaseIndex >= CurrentEntry.TestCases!.Length)
                 {
                     _playState = PlayButtonState.Play;
                 }
@@ -96,7 +107,7 @@ public class MainSimulation : IScreen
 
     private void ResetSimulation()
     {
-        _currentTestCaseIndex = 0;
+        CurrentTestCaseIndex = 0;
         _shortCircuitErr = null;
         CurrentEntry?.Custom?.ClearAllDelayValues();
         CurrentEntry?.Blueprint.Reset();
@@ -106,7 +117,7 @@ public class MainSimulation : IScreen
     {
         if(CurrentEntry is { TestCases: { } cases, Blueprint: { } blueprint })
         {
-            cases.Set(_currentTestCaseIndex, blueprint.InputBufferRaw, _outputTempBuffer);
+            cases.Set(CurrentTestCaseIndex, blueprint.InputBufferRaw, _outputTempBuffer);
             blueprint.StepStateful();
 
             if (!blueprint.OutputBufferRaw.AsSpan().SequenceEqual(_outputTempBuffer.AsSpan(0, blueprint.OutputBufferRaw.Length)))
@@ -132,7 +143,7 @@ public class MainSimulation : IScreen
 
                     if(CurrentEntry is { Custom: Simulation sim } componentEntry)
                     {
-                        sim.Place(toAdd.Blueprint, GetTileOver());
+                        sim.Place(toAdd.Blueprint, GetTileOver(), _rotation & 3);
                         ResetSimulation();
                     }
 
@@ -144,7 +155,6 @@ public class MainSimulation : IScreen
                     if(index < _components.Count)
                     {
                         _selectedSim = index;
-                        _currentTestCaseIndex = 0;
 
                         if (_components[index].Custom is Simulation simulation)
                         {
@@ -208,17 +218,22 @@ public class MainSimulation : IScreen
             _windowSize.X = float.Max(_windowSize.X, 20);
             _windowSize.Y = float.Max(_windowSize.Y, 20);
 
+            if(_dragReason == DragReason.Component && Keys.Space.RisingEdge())
+            {
+                _rotation++;
+            }
+
             return true;
         }
 
-        if(Play.Contains(InputHelper.MouseLocation) && MouseButton.Left.RisingEdge() && CurrentEntry.HasValue)
+        if(Play.Contains(InputHelper.MouseLocation) && MouseButton.Left.RisingEdge() && CurrentEntry is not null)
         {
             switch(_playState)
             {
                 case PlayButtonState.Play:
                     _playState = PlayButtonState.Pause;
                     _testCaseTimer = 0;
-                    _currentTestCaseIndex = 0;
+                    CurrentTestCaseIndex = 0;
                     _components[_selectedSim].Blueprint.Custom?.ClearAllDelayValues();
                     TestTestCase();
                     break;
@@ -264,7 +279,7 @@ public class MainSimulation : IScreen
             && sim.InRange(tileOver)
             && tileOver != dragStart)
         {
-            if(_simDragReason == SimDragReason.PlaceWire)
+            if(_simDragReason == SimDragReason.PlaceWire && sim[tileOver] is not { Kind: TileKind.Component })
             {
                 sim.CreateWire(new Wire(dragStart, tileOver));
                 ResetSimulation();
@@ -303,9 +318,9 @@ public class MainSimulation : IScreen
         _sb.Begin(_camera.View, _camera.Projection);
         _graphics.SpriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: _camera.View);
 
-        if (_selectedSim < _components.Count && _selectedSim >= 0)
+        if (CurrentEntry is { } entry)
         {
-            _components[_selectedSim].Custom?.Draw(_graphics, Step);
+            entry.Custom?.Draw(_graphics, Step);
 
             if (_dragReason == DragReason.Component && 
                 (uint)_selectedComponentToPlace < (uint)_components.Count && 
@@ -313,7 +328,17 @@ public class MainSimulation : IScreen
                 !Sidebar.Contains(InputHelper.MouseLocation))
             {
                 var toDraw = _components[_selectedComponentToPlace];
-                toDraw.Blueprint.Draw(_graphics, null, GetTileOver(), Step, Constants.WireRad, false);
+                toDraw.Blueprint.Draw(_graphics, null, GetTileOver(), Step, Constants.WireRad, false, rotationOverride: _rotation);
+            }
+
+            var over = GetTileOver();
+            if (_dragStartWorld is Point dragStart
+                && (entry.Custom?.InRange(over) ?? false)
+                && over != dragStart
+                && _simDragReason == SimDragReason.PlaceWire)
+            {
+                var colors = Constants.GetWireColor(PowerState.OffState);
+                CurrentEntry?.Custom?.DrawWire(_sb, Step, new Wire(dragStart, over), colors.Color * 0.5f, colors.Output * 0.5f);
             }
         }
 
@@ -355,7 +380,13 @@ public class MainSimulation : IScreen
         {
             _sb.FillRectangle(bounds.Location.ToVector2(), bounds.Size.ToVector2(),
                 light * (bounds.Contains(InputHelper.MouseLocation) || index == _selectedComponentToPlace ? 1.2f : 1f), Rounding);
-            _graphics.DrawStringCentered(entry.Name, bounds.Center.ToVector2());
+
+            _graphics.DrawStringCentered(entry.Name, bounds.Center.ToVector2(), color: _components[index].TestCaseIndex switch
+            {
+                int i when i == _components[index].TestCases?.Length => Color.Green,
+                int i when i > 0 && _components[index].TestCases is not null => Color.Red,
+                _ => Color.White,
+            });
             index++;
         }
 
@@ -387,7 +418,7 @@ public class MainSimulation : IScreen
                 break;
         }
 
-        _graphics.DrawStringCentered($"{_currentTestCaseIndex}/{component.TestCases.Length} passed", new Vector2(p.Left - p.Width, p.Center.Y));
+        _graphics.DrawStringCentered($"{CurrentTestCaseIndex}/{component.TestCases.Length} passed", new Vector2(p.Left - p.Width, p.Center.Y));
     }
 
     private IEnumerable<(Rectangle Rectangle, ComponentEntry ComponentEntry)> EnumerateEntries()

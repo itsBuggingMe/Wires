@@ -33,7 +33,7 @@ public struct FastStack<T>(int capacity)
     public ref FastStack<T> LazyInit()
     {
         if (_buffer is null)
-            this = new(4);
+            this = new(1);
         return ref this;
     }
 

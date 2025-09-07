@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using System;
 using Wires.Core;
 
 namespace Wires.Sim;

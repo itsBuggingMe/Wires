@@ -30,7 +30,7 @@ internal static class Levels
                         "Output" => Blueprint.Output,
                         _ => existingEntries.FirstOrDefault(m => m.Name == component.BlueprintName).Blueprint ?? 
                             throw new System.Exception($"Could not find blueprint of name: {component.BlueprintName}")
-                    }, new(component.X, component.Y), component.AllowDelete, component.InputOutputId ?? 0);
+                    }, new(component.X, component.Y), component.Rotation, component.AllowDelete, component.InputOutputId ?? 0);
                 }
 
                 TestCases? testCases = m.TestCases.Length == 0 ? null : 
@@ -1349,4 +1349,5 @@ internal class ComponentModel
     public int Y { get; init; }
     public bool AllowDelete { get; init; }
     public int? InputOutputId { get; init; }
+    public int Rotation { get; set; }
 }

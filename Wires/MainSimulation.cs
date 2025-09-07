@@ -93,7 +93,7 @@ public class MainSimulation : IScreen
 
     private void TestTestCase()
     {
-        if(CurrentEntry is { TestCases: { } cases, Blueprint: { } blueprint })
+        if(CurrentEntry is { testCases: { } cases, Blueprint: { } blueprint })
         {
             cases.Set(_currentTestCaseIndex, blueprint.InputBufferRaw, _outputTempBuffer);
             blueprint.StepStateful();
@@ -342,7 +342,7 @@ public class MainSimulation : IScreen
 
         var component = _components[_selectedSim];
 
-        if (component.TestCases is null)
+        if (component.testCases is null)
             return;
 
         Rectangle p = Play;
@@ -363,7 +363,7 @@ public class MainSimulation : IScreen
                 break;
         }
 
-        _graphics.DrawStringCentered($"{_currentTestCaseIndex}/{component.TestCases.Length} passed", new Vector2(p.Left - p.Width, p.Center.Y));
+        _graphics.DrawStringCentered($"{_currentTestCaseIndex}/{component.testCases.Length} passed", new Vector2(p.Left - p.Width, p.Center.Y));
     }
 
     private IEnumerable<(Rectangle Rectangle, ComponentEntry ComponentEntry)> EnumerateEntries()

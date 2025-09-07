@@ -1,16 +1,23 @@
 ﻿using System;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Microsoft.Xna.Framework;
 using Wires.Core;
 
 namespace Wires.Sim;
 public class Blueprint
 {
+    [InlineArray(4)]
+    private struct InlineArray4<T>
+    {
+        private T _0;
+    }
+
     private record class BlueprintFlyweight(
-        ImmutableArray<(Point Offset, TileKind Kind)> Display,
-        ImmutableArray<Point> Outputs,
-        ImmutableArray<Point> Inputs,
+        InlineArray4<ImmutableArray<(Point Offset, TileKind Kind)>> Displays,
+        InlineArray4<ImmutableArray<Point>> Outputs,
+        InlineArray4<ImmutableArray<Point>> Inputs,
         IntrinsicBlueprint Descriptor,
         string Text,
         Simulation? Custom
@@ -18,9 +25,9 @@ public class Blueprint
 
     private readonly BlueprintFlyweight _data;
 
-    public ImmutableArray<(Point Offset, TileKind Kind)> Display => _data.Display;
-    public ImmutableArray<Point> Outputs => _data.Outputs;
-    public ImmutableArray<Point> Inputs => _data.Inputs;
+    public ImmutableArray<(Point Offset, TileKind Kind)> Display => _data.Displays[Rotation & 3];
+    public ImmutableArray<Point> Outputs => _data.Outputs[Rotation & 3];
+    public ImmutableArray<Point> Inputs => _data.Inputs[Rotation & 3];
     public IntrinsicBlueprint Descriptor => _data.Descriptor;
     public string Text => _data.Text;
     public Simulation? Custom => _data.Custom;
@@ -30,13 +37,15 @@ public class Blueprint
     public PowerState[] OutputBufferRaw => _outputBuffer;
     private PowerState[] _outputBuffer;
     public PowerState DelayValue;
+    public readonly int Rotation;
 
     public ref PowerState InputBuffer(int index) => ref MemoryHelper.GetValueOrResize(ref _inputBuffer, index);
     public ref PowerState OutputBuffer(int index) => ref MemoryHelper.GetValueOrResize(ref _outputBuffer, index);
 
-    private Blueprint(BlueprintFlyweight data)
+    private Blueprint(BlueprintFlyweight data, int rotation)
     {
         _data = data;
+        Rotation = rotation;
 
         if (data.Custom is not null)
         {
@@ -45,32 +54,49 @@ public class Blueprint
         }
         else
         {
-            _inputBuffer = new PowerState[data.Inputs.Length];
-            _outputBuffer = new PowerState[data.Outputs.Length];
+            _inputBuffer = new PowerState[Inputs.Length];
+            _outputBuffer = new PowerState[Outputs.Length];
         }
     }
 
+    private static Point Rotate(Point p, int rot) => rot switch
+    {
+        0 => p,
+        1 => new Point(-p.Y, p.X),  // 90
+        2 => new Point(-p.X, -p.Y), // 180
+        3 => new Point(p.Y, -p.X),  // 270
+        _ => p
+    };
+
     public Blueprint(ImmutableArray<(Point Offset, TileKind Kind)> display, string text, IntrinsicBlueprint descriptor = IntrinsicBlueprint.None)
-        : this(new BlueprintFlyweight(
-            display,
-            display.Where(d => d.Kind is TileKind.Output).Select(d => d.Offset).ToImmutableArray(),
-            display.Where(d => d.Kind is TileKind.Input).Select(d => d.Offset).ToImmutableArray(),
-            descriptor,
-            text,
-            null))
+        : this(CreateFlyweight(display, descriptor, text, null), 0)
     { }
 
     public Blueprint(Simulation custom, string text, ImmutableArray<(Point Offset, TileKind Kind)> display)
-        : this(new BlueprintFlyweight(
-            display,
-            display.Where(d => d.Kind is TileKind.Output).Select(d => d.Offset).ToImmutableArray(),
-            display.Where(d => d.Kind is TileKind.Input).Select(d => d.Offset).ToImmutableArray(),
-            IntrinsicBlueprint.None,
-            text,
-            custom))
+        : this(CreateFlyweight(display, IntrinsicBlueprint.None, text, custom), 0)
     { }
 
-    public Blueprint Clone() => new Blueprint(_data);
+    private static BlueprintFlyweight CreateFlyweight(ImmutableArray<(Point Offset, TileKind Kind)> display, IntrinsicBlueprint descriptor, string text, Simulation? custom)
+    {
+        InlineArray4<ImmutableArray<(Point Offset, TileKind Kind)>> displays = default;
+        InlineArray4<ImmutableArray<Point>> outputs = default;
+        InlineArray4<ImmutableArray<Point>> inputs = default;
+
+        for (int r = 0; r < 4; r++)
+        {
+            var rotatedDisplay = display
+                .Select(d => (Rotate(d.Offset, r), d.Kind))
+                .ToImmutableArray();
+
+            displays[r] = rotatedDisplay;
+            outputs[r] = rotatedDisplay.Where(d => d.Kind == TileKind.Output).Select(d => d.Item1).ToImmutableArray();
+            inputs[r] = rotatedDisplay.Where(d => d.Kind == TileKind.Input).Select(d => d.Item1).ToImmutableArray();
+        }
+
+        return new BlueprintFlyweight(displays, outputs, inputs, descriptor, text, custom);
+    }
+
+    public Blueprint Clone(int rotation) => new Blueprint(_data, rotation);
 
     public void Reset()
     {
@@ -100,11 +126,11 @@ public class Blueprint
         return null;
     }
 
-    public void Draw(Graphics g, Simulation? sim, Point pos, float scale, float wireRad, bool isShortCircuit, float opacity = 1f)
+    public void Draw(Graphics g, Simulation? sim, Point pos, float scale, float wireRad, bool isShortCircuit, float opacity = 1f, int? rotationOverride = null)
     {
         Color? ssColor = isShortCircuit ? Color.DarkGoldenrod : null;
 
-        foreach ((Point offset, TileKind kind) in Display.AsSpan())
+        foreach ((Point offset, TileKind kind) in _data.Displays[(rotationOverride ?? Rotation) & 3].AsSpan())
         {
             Point tilePos = pos + offset;
             Vector2 mapPos = tilePos.ToVector2() * scale;

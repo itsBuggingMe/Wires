@@ -4,6 +4,7 @@ using Wires.Core;
 using Apos.Shapes;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using static System.Formats.Asn1.AsnWriter;
 
 namespace Wires.Sim;
 
@@ -299,11 +300,10 @@ public class Simulation
 
     public void RecordDelayValues()
     {
-        Point inputOffset = Blueprint.Delay.Inputs[0];
         foreach (var delayComponentId in _delayComponentIds)
         {
             Component delayComponent = _components[delayComponentId];
-            delayComponent.Blueprint.DelayValue = PowerStateAt(delayComponent.Position + inputOffset);
+            delayComponent.Blueprint.DelayValue = PowerStateAt(delayComponent.GetInputPosition(0));
         }
 
         foreach(var component in _components.AsSpan())
@@ -365,15 +365,16 @@ public class Simulation
                 {
                     _wiresToMove.PushRef() = (node.To, oldWirePos + delta, node.Id);
                 }
-                foreach(var wire in _wiresToMove.AsSpan())
-                {
-                    DestroyWire(wire.Id);
-                }
-                while(_wiresToMove.TryPop(out var x))
-                {
-                    CreateWire(new Wire(x.A, x.B));
-                }
             }
+        }
+
+        foreach (var wire in _wiresToMove.AsSpan())
+        {
+            DestroyWire(wire.Id);
+        }
+        while (_wiresToMove.TryPop(out var x))
+        {
+            CreateWire(new Wire(x.A, x.B));
         }
 
         foreach (var element in component.Blueprint.Display)
@@ -436,9 +437,9 @@ public class Simulation
         return default;
     }
 
-    public int Place(Blueprint blueprint, Point position, bool allowDelete = true, int inputOutputId = 0)
+    public int Place(Blueprint blueprint, Point position, int rotation, bool allowDelete = true, int inputOutputId = 0)
     {
-        blueprint = blueprint.Clone();
+        blueprint = blueprint.Clone(rotation);
 
         foreach(var item in blueprint.Display)
         {
@@ -577,29 +578,50 @@ public class Simulation
                 continue;
             var (color, outline) = Constants.GetWireColor(wire.PowerState);
 
-            DrawWire(wire, color, outline);
+            DrawWire(sb, scale, wire, color, outline);
         }
 
         if(CurrentShortCircuit is { WireId: > 0 })
         {
             Wire w = _wires[CurrentShortCircuit.WireId];
 
-            DrawWire(w, Color.Yellow, Color.DarkGoldenrod);
+            DrawWire(sb, scale, w, Color.Yellow, Color.DarkGoldenrod);
         }
+    }
 
-        void DrawWire(Wire wire, Color color, Color outline)
+    public void DrawWire(ShapeBatch sb, float scale, Wire wire, Color color, Color outline)
+    {
+        var b = wire.B.ToVector2() * scale;
+        var a = wire.A.ToVector2() * scale;
+
+        sb.DrawLine(a,
+                    b, Constants.WireRad, color, outline, 4);
+        
+        Node(wire.A, a);
+        Node(wire.B, b);
+
+        void Node(Point point, Vector2 a)
         {
-            var a = wire.A.ToVector2() * scale;
-            var b = wire.B.ToVector2() * scale;
-            sb.DrawLine(a,
-                        b, Constants.WireRad, color, outline, 4);
+            sb.DrawCircle(a, Constants.WireRad * 1.45f, color, outline, 4);
+            Color thatGrayColor = new Color(64, 64, 64);
+            if (InRange(wire.A))
+            {
+                var k = this[point].Kind;
+                if (k is TileKind.Input)
+                {
+                    sb.DrawEquilateralTriangle(a, Constants.WireRad * 0.35f, thatGrayColor, outline, 0);
+                    return;
+                }
+                else if(k is TileKind.Output)
+                {
+                    Vector2 size = new(Constants.WireRad * 0.85f);
+                    sb.DrawRectangle(a - size * 0.5f, size, thatGrayColor, outline, 0);
+                    return;
+                }
+            }
 
-            sb.DrawCircle(a, Constants.WireRad * 1.42f, color, outline, 4);
-            sb.DrawCircle(a, Constants.WireRad * 0.5f, new Color(64, 64, 64), outline, 0);
 
-
-            sb.DrawCircle(b, Constants.WireRad * 1.42f, color, outline, 4);
-            sb.DrawCircle(b, Constants.WireRad * 0.5f, new Color(64, 64, 64), outline, 0);
+            sb.DrawCircle(a, Constants.WireRad * 0.5f, thatGrayColor, outline, 0);
         }
     }
 
