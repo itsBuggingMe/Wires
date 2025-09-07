@@ -20,41 +20,41 @@ internal static class Levels
 
             return levels.Select(m =>
             {
-            Simulation simulation = new Simulation(m.GridWidth, m.GridHeight);
+                Simulation simulation = new Simulation(m.GridWidth, m.GridHeight);
 
-            foreach(var component in m.Components)
-            {
-                simulation.Place(component.BlueprintName switch
+                foreach(var component in m.Components)
                 {
-                    "Input" => Blueprint.Input,
-                    "Output" => Blueprint.Output,
-                    _ => existingEntries.FirstOrDefault(m => m.Name == component.BlueprintName).Blueprint ?? 
-                        throw new System.Exception($"Could not find blueprint of name: {component.BlueprintName}")
-                }, new(component.X, component.Y), component.AllowDelete, component.InputOutputId ?? 0);
-            }
+                    simulation.Place(component.BlueprintName switch
+                    {
+                        "Input" => Blueprint.Input,
+                        "Output" => Blueprint.Output,
+                        _ => existingEntries.FirstOrDefault(m => m.Name == component.BlueprintName).Blueprint ?? 
+                            throw new System.Exception($"Could not find blueprint of name: {component.BlueprintName}")
+                    }, new(component.X, component.Y), component.AllowDelete, component.InputOutputId ?? 0);
+                }
 
-            TestCases? testCases = m.TestCases.Length == 0 ? null : 
-                new TestCases(
-                    m.TestCases.Select(t => 
-                        (t.Inputs.Select(i => i ? On : Off).ToArray(), 
-                        t.Outputs.Select(i => i ? On : Off).ToArray())
-                        ).ToArray());
+                TestCases? testCases = m.TestCases.Length == 0 ? null : 
+                    new TestCases(
+                        m.TestCases.Select(t => 
+                            (t.Inputs.Select(i => i ? On : Off).ToArray(), 
+                            t.Outputs.Select(i => i ? On : Off).ToArray())
+                            ).ToArray());
 
-            return new ComponentEntry(new Blueprint(simulation, m.Name,
-                m.ComponentTiles.Select(t => (new Point(t.X, t.Y), t.TileKind switch
-                {
-                    nameof(TileKind.Input) => TileKind.Input,
-                    nameof(TileKind.Output) => TileKind.Output,
-                    nameof(TileKind.Component) => TileKind.Component,
-                    _ => throw new System.Exception($"Unknown tile kind: {t.TileKind}")
-                })).ToImmutableArray()),
-                testCases);
+                return new ComponentEntry(new Blueprint(simulation, m.Name,
+                    m.ComponentTiles.Select(t => (new Point(t.X, t.Y), t.TileKind switch
+                    {
+                        nameof(TileKind.Input) => TileKind.Input,
+                        nameof(TileKind.Output) => TileKind.Output,
+                        nameof(TileKind.Component) => TileKind.Component,
+                        _ => throw new System.Exception($"Unknown tile kind: {t.TileKind}")
+                    })).ToImmutableArray()),
+                    testCases);
         });
     }
 
     private const string LevelsJson =
         """
-                [
+        [
           {
             "GridWidth": 9,
             "GridHeight": 9,

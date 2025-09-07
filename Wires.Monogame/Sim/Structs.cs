@@ -53,7 +53,6 @@ public struct Component : IFreeListId
 {
     public Point Position;
     public Blueprint Blueprint;
-    public int LastVisitId;
     public int InputOutputId;
     public bool AllowDelete;
 

@@ -25,6 +25,8 @@ public class MainSimulation : IScreen
     private DragReason _dragReason;
     private int _selectedComponentToPlace = -1;
 
+    private ShortCircuitDescription? _shortCircuitErr;
+
     private enum DragReason : byte { Right = 1, Bottom = 2, Component = 4, }
     private enum PlayButtonState : byte { Play, Pause }
     private PlayButtonState _playState;
@@ -81,7 +83,7 @@ public class MainSimulation : IScreen
         if (UiInput())
             return;
 
-        if (CurrentEntry is { World: not null } x && SimInteract(x.Blueprint))
+        if (CurrentEntry is { Custom: not null } x && SimInteract(x.Blueprint))
             return;
 
         UpdateCamera();
@@ -90,6 +92,13 @@ public class MainSimulation : IScreen
     private Rectangle Sidebar => new Rectangle(new(Padding), _windowSize.ToPoint());
     private Rectangle Play => new Rectangle(_graphics.GraphicsDevice.Viewport.Width - 64 - Padding, Padding, 64, 64);
 
+    private void ResetSimulation()
+    {
+        _currentTestCaseIndex = 0;
+        _shortCircuitErr = null;
+        CurrentEntry?.Custom?.ClearAllDelayValues();
+        CurrentEntry?.Blueprint.Reset();
+    }
 
     private void TestTestCase()
     {
@@ -98,7 +107,7 @@ public class MainSimulation : IScreen
             cases.Set(_currentTestCaseIndex, blueprint.InputBufferRaw, _outputTempBuffer);
             blueprint.StepStateful();
 
-            if(!blueprint.OutputBufferRaw.AsSpan().SequenceEqual(_outputTempBuffer.AsSpan(0, blueprint.OutputBufferRaw.Length)))
+            if (!blueprint.OutputBufferRaw.AsSpan().SequenceEqual(_outputTempBuffer.AsSpan(0, blueprint.OutputBufferRaw.Length)))
             {
                 _playState = PlayButtonState.Play;
             }
@@ -119,10 +128,10 @@ public class MainSimulation : IScreen
                 {
                     ComponentEntry toAdd = _components[_selectedComponentToPlace];
 
-                    if(CurrentEntry is { World: Simulation sim } componentEntry)
+                    if(CurrentEntry is { Custom: Simulation sim } componentEntry)
                     {
                         sim.Place(toAdd.Blueprint, GetTileOver());
-                        componentEntry.Blueprint.Reset();
+                        ResetSimulation();
                     }
 
                     _selectedComponentToPlace = -1;
@@ -133,7 +142,9 @@ public class MainSimulation : IScreen
                     if(index < _components.Count)
                     {
                         _selectedSim = index;
-                        if(_components[index].World is Simulation simulation)
+                        _currentTestCaseIndex = 0;
+
+                        if (_components[index].Custom is Simulation simulation)
                         {
                             _camera.Position = new Vector2(Step * simulation.Width, Step * simulation.Height) * -0.5f + new Vector2(Step * 0.5f)
                                 + Vector2.UnitX * _windowSize.X * 0.5f;
@@ -251,7 +262,7 @@ public class MainSimulation : IScreen
         {
             input = true;
             sim.CreateWire(new Wire(dragStart, tileOver));
-            blueprint.Reset();
+            ResetSimulation();
             _dragStartWorld = null;
         }
 
@@ -261,12 +272,12 @@ public class MainSimulation : IScreen
             if(sim.IdOfWireAt(tileOver) is int id)
             {
                 sim.DestroyWire(id);
-                blueprint.Reset();
             }
             else if (sim[tileOver].Kind is not TileKind.Nothing)
             {
                 sim.DestroyComponent(tileOver);
             }
+            ResetSimulation();
         }
 
         return input;
@@ -281,7 +292,7 @@ public class MainSimulation : IScreen
 
         if (_selectedSim < _components.Count && _selectedSim >= 0)
         {
-            _components[_selectedSim].World?.Draw(_graphics, Step);
+            _components[_selectedSim].Custom?.Draw(_graphics, Step);
 
             if (_dragReason == DragReason.Component && 
                 (uint)_selectedComponentToPlace < (uint)_components.Count && 
@@ -289,7 +300,7 @@ public class MainSimulation : IScreen
                 !Sidebar.Contains(InputHelper.MouseLocation))
             {
                 var toDraw = _components[_selectedComponentToPlace];
-                toDraw.Blueprint.Draw(_graphics, null, GetTileOver(), Step, Constants.WireRad);
+                toDraw.Blueprint.Draw(_graphics, null, GetTileOver(), Step, Constants.WireRad, false);
             }
         }
 
@@ -305,6 +316,7 @@ public class MainSimulation : IScreen
             _graphics.DrawStringCentered("No Component Selected", _graphics.GraphicsDevice.Viewport.Bounds.Size.ToVector2() * 0.5f);
         else
             _graphics.DrawString(_components[_selectedSim].Name, new Vector2(sidebar.Right + Padding, sidebar.Top), default, 2, Color.White);
+
         DrawUi();
 
         _sb.End();
@@ -320,6 +332,7 @@ public class MainSimulation : IScreen
     {
         Color dark = new Color(33, 24, 24);
         Color light = new Color(92, 62, 62);
+
         _sb.DrawRectangle(new(Padding), _windowSize,
             dark,
             light, 4, Rounding);
@@ -328,7 +341,7 @@ public class MainSimulation : IScreen
         foreach(var (bounds, entry) in EnumerateEntries())
         {
             _sb.FillRectangle(bounds.Location.ToVector2(), bounds.Size.ToVector2(),
-                new Color(92, 62, 62) * (bounds.Contains(InputHelper.MouseLocation) || index == _selectedComponentToPlace ? 1.2f : 1f), Rounding);
+                light * (bounds.Contains(InputHelper.MouseLocation) || index == _selectedComponentToPlace ? 1.2f : 1f), Rounding);
             _graphics.DrawStringCentered(entry.Name, bounds.Center.ToVector2());
             index++;
         }
@@ -383,9 +396,13 @@ public class MainSimulation : IScreen
         const float ScrollScaleM = 1.2f;
         if (InputHelper.DeltaScroll != 0)
             _camera.Scale *= InputHelper.DeltaScroll > 0 ? ScrollScaleM : 1 / ScrollScaleM;
+        if (InputHelper.RisingEdge(Keys.OemPlus))
+            _camera.Scale *= ScrollScaleM;
+        if (InputHelper.RisingEdge(Keys.OemMinus))
+            _camera.Scale /= ScrollScaleM;
 
         if (InputHelper.Down(MouseButton.Left) && _dragStartWorld is null)
-            _camera.Position -= (InputHelper.PrevMouseState.Position.ToVector2() - InputHelper.MouseLocation.ToVector2());
+            _camera.Position -= (InputHelper.PrevMouseState.Position.ToVector2() - InputHelper.MouseLocation.ToVector2()) / _camera.Scale;
     }
 
     const float Step = 50f;

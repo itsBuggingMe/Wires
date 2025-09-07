@@ -2,14 +2,14 @@
 using Microsoft.Xna.Framework;
 using Wires.Core;
 using Apos.Shapes;
-using System.Collections;
 using System.Collections.Generic;
-using System.Security.Cryptography;
 
 namespace Wires.Sim;
 
 public class Simulation
 {
+    public ShortCircuitDescription? CurrentShortCircuit { get; private set; }
+
     private readonly Tile[] _tiles;
 
     public int Width { get; private set; }
@@ -29,8 +29,6 @@ public class Simulation
     private FreeStack<Wire> _wires = new FreeStack<Wire>(16);
 
     private FreeStack<Component> _components = new(16);
-
-    private int _nextVisitId = 1;
 
     private Dictionary<Point, PowerState> _outputs = [];
 
@@ -67,8 +65,9 @@ public class Simulation
         }
     }
 
-    public IEnumerable StepEnumerator(Blueprint blueprint)
+    public IEnumerable<ShortCircuitDescription?> StepEnumerator(Blueprint blueprint)
     {
+        CurrentShortCircuit = null;
         _outputs.Clear();
 
         foreach (ref var wire in _wires.AsSpan())
@@ -79,10 +78,45 @@ public class Simulation
 
         yield return null;
 
-        int visitId = _nextVisitId++;
+        // also add components
+        int id = 0;
+        foreach (var component in _components.AsSpan())
+        {
+            if (!component.Exists)
+                continue;
 
+            if (component.Blueprint is { Custom: not null, Inputs.Length: 0 })
+            {// cant bump components that have no inputs by pushing to work list
+                component.Blueprint.StepStateful(false);
 
-        foreach(var seedComponentId in _seedComponents)
+                for (int i = 0; i < component.Blueprint.Outputs.Length; i++)
+                {
+                    PowerState power = component.Blueprint.OutputBuffer(i);
+                    Point outputPosition = component.GetOutputPosition(i);
+
+                    if(StartVisit(component.GetOutputPosition(i), id, power) is { } err)
+                    {
+                        yield return CurrentShortCircuit = new ShortCircuitDescription(id, -1, default, default, -1, err);
+                        yield break;
+                    }
+                }
+                continue;
+            }
+
+            foreach (var offset in component.Blueprint.Inputs)
+            {
+                if (ConnectedToAnOutput(component.Position))
+                    continue;
+
+                _workList.Enqueue(new WorkItem(component.Position + offset, PowerState.OffState, id));
+                // only need to update 1 input
+                break;
+            }
+
+            id++;
+        }
+
+        foreach (var seedComponentId in _seedComponents)
         {
             Component component = _components[seedComponentId];
             Point firstOutputPos = component.GetOutputPosition(0);
@@ -105,25 +139,6 @@ public class Simulation
             yield return null;
         }
 
-        // also add components
-        int id = 0;
-        foreach(var component in _components.AsSpan())
-        {
-            if (!component.Exists)
-                continue;
-            foreach(var offset in component.Blueprint.Inputs)
-            {
-                if (ConnectedToAnOutput(component.Position))
-                    continue;
-
-                _workList.Enqueue(new WorkItem(component.Position + offset, PowerState.OffState, id));
-                break;
-                // only need to update 1 input
-            }
-
-            id++;
-        }
-
         // do work
 
         while (_workList.TryDequeue(out WorkItem w))
@@ -132,6 +147,7 @@ public class Simulation
             Tile tile = this[w.Position];
             ref Component component = ref _components[tile.ComponentId];
 
+            ShortCircuitDescription? shortCircuit = null;
             switch (component.Blueprint.Descriptor)
             {
                 case Blueprint.IntrinsicBlueprint.Output:
@@ -139,20 +155,12 @@ public class Simulation
                     blueprint.OutputBuffer(component.InputOutputId) = w.State;
                     break;
                 case Blueprint.IntrinsicBlueprint.NAND:
-                    component.LastVisitId = visitId;
-
                     PowerState a = PowerStateAt(component.GetInputPosition(0));
                     PowerState b = PowerStateAt(component.GetInputPosition(1));
 
                     PowerState outputPowerState = !(a.On && b.On) ? PowerState.OnState : PowerState.OffState; // nand!
 
-                    _outputs.TryAdd(component.GetOutputPosition(0), outputPowerState);
-
-
-                    foreach (WireNode connection in WiresAt(component.GetOutputPosition(0)))
-                    {
-                        VisitWire(connection, tile.ComponentId, outputPowerState);
-                    }
+                    shortCircuit = StartVisit(component.GetOutputPosition(0), tile.ComponentId, outputPowerState);
                     break;
                 //case Blueprint.IntrinsicBlueprint.Not:
                 //    PowerState inputState = PowerStateAt(component.GetInputPosition(0));
@@ -172,17 +180,10 @@ public class Simulation
                 //    break;
                 case Blueprint.IntrinsicBlueprint.Delay:
                     // read delay value
-                    component.LastVisitId = visitId;
 
                     PowerState outputDelayValue = component.Blueprint.DelayValue;
 
-                    _outputs.TryAdd(component.GetOutputPosition(0), outputDelayValue);
-
-
-                    foreach (WireNode connection in WiresAt(component.GetOutputPosition(0)))
-                    {
-                        VisitWire(connection, tile.ComponentId, outputDelayValue);
-                    }
+                    shortCircuit = StartVisit(component.GetOutputPosition(0), tile.ComponentId, outputDelayValue);
                     break;
                 case Blueprint.IntrinsicBlueprint.None:
                     if (component.Blueprint.Custom is null)
@@ -193,41 +194,54 @@ public class Simulation
 
                     component.Blueprint.OutputBufferRaw.AsSpan().Clear();
 
-                    component.Blueprint.StepStateful();
+                    if(component.Blueprint.StepStateful(false) is ShortCircuitDescription pow)
+                    {
+                        yield return CurrentShortCircuit = new ShortCircuitDescription(tile.ComponentId, -1, default, default, -1, pow);
+                        yield break;
+                    }
 
                     for (int i = 0; i < component.Blueprint.Outputs.Length; i++)
                     {
                         PowerState power = component.Blueprint.OutputBuffer(i);
                         Point outputPosition = component.GetOutputPosition(i);
-                        _outputs.TryAdd(outputPosition, power);
 
-                        foreach (WireNode connection in WiresAt(outputPosition))
-                        {
-                            VisitWire(connection, tile.ComponentId, power);
-                        }
+                        shortCircuit = StartVisit(component.GetOutputPosition(i), tile.ComponentId, power);
                     }
                     break;
                 default: throw new NotImplementedException();
             }
 
-            yield return null;
+            if(shortCircuit is ShortCircuitDescription err)
+            {
+                yield return err;
+                yield break;
+            }
+            else
+            {
+                yield return null;
+            }
         }
 
         // before returning, update inputs of delay components
 
-        Point inputOffset = Blueprint.Delay.Inputs[0];
-        foreach(var delayComponentId in _delayComponentIds)
+        ShortCircuitDescription? StartVisit(Point point, int componentId, PowerState state)
         {
-            Component delayComponent = _components[delayComponentId];
-            delayComponent.Blueprint.DelayValue = PowerStateAt(delayComponent.Position + inputOffset);
+            _outputs.TryAdd(point, state);
+
+            foreach (WireNode connection in WiresAt(point))
+            {
+                if (VisitWire(connection, componentId, state) is ShortCircuitDescription shortCircuitDescription)
+                    return shortCircuitDescription;
+            }
+            return null;
         }
 
-        void VisitWire(WireNode wireNode, int componentId, PowerState state)
+        ShortCircuitDescription? VisitWire(WireNode wireNode, int componentId, PowerState state)
         {
             ref Wire wire = ref _wires[wireNode.Id];
 
             if (wire.LastVisitComponentId == componentId && wire.PowerState == state)
-                return;
+                return null;
             
             wire.LastVisitComponentId = componentId;
             wire.PowerState = state;
@@ -243,17 +257,22 @@ public class Simulation
 
                 if (connectedWire.LastVisitComponentId != -1)
                 {// this wire has been powered already
-                    if(connectedWire.LastVisitComponentId == componentId)
+                    if (connectedWire.LastVisitComponentId == componentId)
                         continue;
-                    else if(connectedWire.PowerState != state)
-                        throw new Exception("Short Circuit!");
+                    else if (connectedWire.PowerState != state)
+                        return CurrentShortCircuit = new ShortCircuitDescription(connectedWire.LastVisitComponentId, componentId, connectedWire.PowerState, state, wireNode.Id);
                 }
 
                 connectedWire.PowerState = state;
 
                 // copy power state to other wires
-                VisitWire(connection, componentId, state);
+                if(VisitWire(connection, componentId, state) is ShortCircuitDescription err)
+                {
+                    return err;
+                }
             }
+
+            return null;
         }
 
         bool ConnectedToAnOutput(Point connection)
@@ -273,6 +292,27 @@ public class Simulation
             }
 
             return false;
+        }
+    }
+
+    public void RecordDelayValues()
+    {
+        Point inputOffset = Blueprint.Delay.Inputs[0];
+        foreach (var delayComponentId in _delayComponentIds)
+        {
+            Component delayComponent = _components[delayComponentId];
+            delayComponent.Blueprint.DelayValue = PowerStateAt(delayComponent.Position + inputOffset);
+        }
+
+        foreach(var component in _components.AsSpan())
+        {
+            if (!component.Exists)
+                continue;
+
+            if(component.Blueprint.Custom is { } b)
+            {
+                b.RecordDelayValues();
+            }
         }
     }
 
@@ -461,12 +501,16 @@ public class Simulation
 
         Vector2 halfTileOffset = new Vector2(scale) * 0.5f;
 
+        int shortCircuitComponentId = CurrentShortCircuit is { Next: not null } ? CurrentShortCircuit.ComponentIdA : -1;
+
+        int id = 0;
         foreach (ref var component in _components.AsSpan())
         {
             if (!component.Exists)
                 continue;
 
-            component.Blueprint.Draw(g, this, component.Position, scale, Constants.WireRad);
+            component.Blueprint.Draw(g, this, component.Position, scale, Constants.WireRad, id == shortCircuitComponentId);
+            id++;
         }
 
         foreach (ref var wire in _wires.AsSpan())
@@ -475,10 +519,21 @@ public class Simulation
                 continue;
             var (color, outline) = Constants.GetWireColor(wire.PowerState);
 
+            DrawWire(wire, color, outline);
+        }
+
+        if(CurrentShortCircuit is { WireId: > 0 })
+        {
+            Wire w = _wires[CurrentShortCircuit.WireId];
+
+            DrawWire(w, Color.Yellow, Color.DarkGoldenrod);
+        }
+
+        void DrawWire(Wire wire, Color color, Color outline)
+        {
             var a = wire.A.ToVector2() * scale;
             var b = wire.B.ToVector2() * scale;
-
-            sb.DrawLine(a, 
+            sb.DrawLine(a,
                         b, Constants.WireRad, color, outline, 4);
 
             sb.DrawCircle(a, Constants.WireRad * 1.42f, color, outline, 4);

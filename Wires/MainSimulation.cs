@@ -81,7 +81,7 @@ public class MainSimulation : IScreen
         if (UiInput())
             return;
 
-        if (CurrentEntry is { World: not null } x && SimInteract(x.Blueprint))
+        if (CurrentEntry is { Custom: not null } x && SimInteract(x.Blueprint))
             return;
 
         UpdateCamera();
@@ -119,7 +119,7 @@ public class MainSimulation : IScreen
                 {
                     ComponentEntry toAdd = _components[_selectedComponentToPlace];
 
-                    if(CurrentEntry is { World: Simulation sim } componentEntry)
+                    if(CurrentEntry is { Custom: Simulation sim } componentEntry)
                     {
                         sim.Place(toAdd.Blueprint, GetTileOver());
                         componentEntry.Blueprint.Reset();
@@ -133,7 +133,7 @@ public class MainSimulation : IScreen
                     if(index < _components.Count)
                     {
                         _selectedSim = index;
-                        if(_components[index].World is Simulation simulation)
+                        if(_components[index].Custom is Simulation simulation)
                         {
                             _camera.Position = new Vector2(-Step) * new Vector2(simulation.Width, simulation.Height) / 2 + _graphics.GraphicsDevice.Viewport.Bounds.Size.ToVector2() / 2;
                         }
@@ -283,7 +283,7 @@ public class MainSimulation : IScreen
 
         if (_selectedSim < _components.Count && _selectedSim >= 0)
         {
-            _components[_selectedSim].World?.Draw(_graphics, Step);
+            _components[_selectedSim].Custom?.Draw(_graphics, Step);
 
             if (_dragReason == DragReason.Component && 
                 (uint)_selectedComponentToPlace < (uint)_components.Count && 
@@ -291,7 +291,7 @@ public class MainSimulation : IScreen
                 !Sidebar.Contains(InputHelper.MouseLocation))
             {
                 var toDraw = _components[_selectedComponentToPlace];
-                toDraw.Blueprint.Draw(_graphics, null, GetTileOver(), Step, Constants.WireRad);
+                toDraw.Blueprint.Draw(_graphics, null, GetTileOver(), Step, Constants.WireRad, false);
             }
         }
 

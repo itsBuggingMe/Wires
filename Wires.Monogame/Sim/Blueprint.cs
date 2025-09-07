@@ -80,17 +80,30 @@ public class Blueprint
         StepStateful();
     }
 
-    public void StepStateful()
+    public ShortCircuitDescription? StepStateful(bool recordDelayValue = true)
     {
         if (Custom is null)
-            return;
+            return null;
 
         var enumerator = Custom.StepEnumerator(this).GetEnumerator();
-        while (enumerator.MoveNext()) ;
+        while (enumerator.MoveNext())
+        {
+            if(enumerator.Current is ShortCircuitDescription err)
+                return err;
+        }
+
+        if(recordDelayValue)
+        {
+            Custom.RecordDelayValues();
+        }
+
+        return null;
     }
 
-    public void Draw(Graphics g, Simulation? sim, Point pos, float scale, float wireRad, float opacity = 1f)
+    public void Draw(Graphics g, Simulation? sim, Point pos, float scale, float wireRad, bool isShortCircuit, float opacity = 1f)
     {
+        Color? ssColor = isShortCircuit ? Color.DarkGoldenrod : null;
+
         foreach ((Point offset, TileKind kind) in Display.AsSpan())
         {
             Point tilePos = pos + offset;
@@ -109,7 +122,7 @@ public class Blueprint
                     g.ShapeBatch.DrawCircle(mapPos, wireRad * 0.5f, color, outline);
                     break;
                 case TileKind.Component:
-                    g.ShapeBatch.FillRectangle(mapPos - new Vector2(scale) * 0.5f, new(scale), new Color(181, 14, 59) * opacity, 8);
+                    g.ShapeBatch.FillRectangle(mapPos - new Vector2(scale) * 0.5f, new(scale), ssColor ?? new Color(181, 14, 59) * opacity, 8);
                     break;
             }
         }
