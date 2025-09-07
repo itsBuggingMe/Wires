@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 using Wires.Core;
 using Apos.Shapes;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace Wires.Sim;
 
@@ -83,9 +84,9 @@ public class Simulation
         foreach (var component in _components.AsSpan())
         {
             if (!component.Exists)
-                continue;
+                goto @continue;
 
-            if (component.Blueprint is { Custom: not null, Inputs.Length: 0 })
+            if (component.Blueprint is { Custom: not null, Inputs.Length: 0, Descriptor: not Blueprint.IntrinsicBlueprint.Input })
             {// cant bump components that have no inputs by pushing to work list
                 component.Blueprint.StepStateful(false);
 
@@ -100,19 +101,20 @@ public class Simulation
                         yield break;
                     }
                 }
-                continue;
+                goto @continue;
             }
 
             foreach (var offset in component.Blueprint.Inputs)
             {
                 if (ConnectedToAnOutput(component.Position))
-                    continue;
+                    goto @continue;
 
                 _workList.Enqueue(new WorkItem(component.Position + offset, PowerState.OffState, id));
                 // only need to update 1 input
                 break;
             }
 
+        @continue:
             id++;
         }
 
@@ -333,6 +335,62 @@ public class Simulation
                 component.Blueprint.Custom!.ClearAllDelayValues();
             }
         }
+    }
+    private FastStack<(Point A, Point B, int Id)> _wiresToMove = new(4);
+    public bool MoveComponent(int componentId, Point to)
+    {
+        ref Component component = ref _components[componentId];
+
+        if (component.Position == to)
+            return true;
+
+        Point delta = to - component.Position;
+
+        foreach(var element in component.Blueprint.Display)
+        {
+            Point destPos = element.Offset + to;
+            if(!InRange(destPos) || (this[destPos] is { Kind: not TileKind.Nothing } dest && dest.ComponentId != componentId))
+            {
+                return false;
+            }
+        }
+
+        foreach(var element in component.Blueprint.Display)
+        {
+            if(element.Kind is TileKind.Output or TileKind.Input)
+            {
+                Point oldWirePos = component.Position + element.Offset;
+                // all separate to avoid messing up the data structures
+                foreach(var node in WiresAt(oldWirePos))
+                {
+                    _wiresToMove.PushRef() = (node.To, oldWirePos + delta, node.Id);
+                }
+                foreach(var wire in _wiresToMove.AsSpan())
+                {
+                    DestroyWire(wire.Id);
+                }
+                while(_wiresToMove.TryPop(out var x))
+                {
+                    CreateWire(new Wire(x.A, x.B));
+                }
+            }
+        }
+
+        foreach (var element in component.Blueprint.Display)
+        {
+            Point fromPos = element.Offset + component.Position;
+            this[fromPos] = default;
+        }
+
+        foreach (var element in component.Blueprint.Display)
+        {
+            Point destPos = element.Offset + to;
+            this[destPos] = new() { ComponentId = componentId, Kind = element.Kind };
+        }
+
+        component.Position = to;
+
+        return true;
     }
 
     readonly record struct WorkItem(Point Position, PowerState State, int ComponentId);

@@ -10,9 +10,7 @@ using System.Linq;
 using Wires.Core;
 using Wires.Sim;
 
-namespace Wires;
-
-#nullable enable
+namespace Wires.States;
 
 public class MainSimulation : IScreen
 {
@@ -28,6 +26,10 @@ public class MainSimulation : IScreen
     private ShortCircuitDescription? _shortCircuitErr;
 
     private enum DragReason : byte { Right = 1, Bottom = 2, Component = 4, }
+    private enum SimDragReason : byte { PlaceWire, MoveComponent }
+    private SimDragReason _simDragReason;
+    private int _draggedComponentId;
+
     private enum PlayButtonState : byte { Play, Pause }
     private PlayButtonState _playState;
     private int _currentTestCaseIndex;
@@ -118,7 +120,7 @@ public class MainSimulation : IScreen
     {
         Rectangle sidebar = Sidebar;
 
-        if (_dragStartUi is not null && !InputHelper.Down(MouseButton.Left))
+        if (_dragStartUi is not null && !MouseButton.Left.Down())
         {
             // implicit falling edge
             // drag and drop
@@ -180,7 +182,7 @@ public class MainSimulation : IScreen
             if (cursor is not null)
                 Mouse.SetCursor(cursor);
 
-            if (_dragReason != default && InputHelper.RisingEdge(MouseButton.Left))
+            if (_dragReason != default && MouseButton.Left.RisingEdge())
             {
                 _dragStartUi = InputHelper.MouseLocation;
                 if(_dragReason == DragReason.Component)
@@ -209,7 +211,7 @@ public class MainSimulation : IScreen
             return true;
         }
 
-        if(Play.Contains(InputHelper.MouseLocation) && InputHelper.RisingEdge(MouseButton.Left) && CurrentEntry.HasValue)
+        if(Play.Contains(InputHelper.MouseLocation) && MouseButton.Left.RisingEdge() && CurrentEntry.HasValue)
         {
             switch(_playState)
             {
@@ -248,25 +250,36 @@ public class MainSimulation : IScreen
         if (_dragStartWorld is not null)
             input = true;
 
-        if (InputHelper.RisingEdge(MouseButton.Left) && sim.InRange(tileOver) && 
-            (sim[tileOver].Kind is TileKind.Output or TileKind.Input || sim.IdOfWireAt(tileOver) is int))
+        if (MouseButton.Left.RisingEdge() && sim.InRange(tileOver) && 
+            (sim[tileOver].Kind is TileKind.Output or TileKind.Input or TileKind.Component || sim.IdOfWireAt(tileOver) is int))
         {
             input = true;
             _dragStartWorld = tileOver;
+            _simDragReason = sim[tileOver].Kind == TileKind.Component ? SimDragReason.MoveComponent : SimDragReason.PlaceWire;
+            _draggedComponentId = sim[tileOver].ComponentId;
         }
 
-        if (InputHelper.FallingEdge(MouseButton.Left)
+        if (MouseButton.Left.FallingEdge()
             && _dragStartWorld is Point dragStart
             && sim.InRange(tileOver)
             && tileOver != dragStart)
         {
+            if(_simDragReason == SimDragReason.PlaceWire)
+            {
+                sim.CreateWire(new Wire(dragStart, tileOver));
+                ResetSimulation();
+            }
             input = true;
-            sim.CreateWire(new Wire(dragStart, tileOver));
-            ResetSimulation();
             _dragStartWorld = null;
         }
 
-        if (InputHelper.FallingEdge(MouseButton.Right))
+        if(MouseButton.Left.Down() && _dragStartWorld is Point && _simDragReason == SimDragReason.MoveComponent)
+        {
+            sim.MoveComponent(_draggedComponentId, tileOver);
+            ResetSimulation();
+        }
+
+        if (MouseButton.Right.FallingEdge())
         {
             input = true;
             if(sim.IdOfWireAt(tileOver) is int id)
@@ -357,7 +370,7 @@ public class MainSimulation : IScreen
             return;
 
         Rectangle p = Play;
-        float m = p.Contains(InputHelper.MouseLocation) ? InputHelper.Down(MouseButton.Left) ? 1.2f : 1.1f : 1f;
+        float m = p.Contains(InputHelper.MouseLocation) ? MouseButton.Left.Down() ? 1.2f : 1.1f : 1f;
 
         _sb.DrawRectangle(p.Location.ToVector2(), p.Size.ToVector2(), dark * m, light * m, 4, Rounding);
         switch(_playState)
@@ -396,12 +409,12 @@ public class MainSimulation : IScreen
         const float ScrollScaleM = 1.2f;
         if (InputHelper.DeltaScroll != 0)
             _camera.Scale *= InputHelper.DeltaScroll > 0 ? ScrollScaleM : 1 / ScrollScaleM;
-        if (InputHelper.RisingEdge(Keys.OemPlus))
+        if (Keys.OemPlus.RisingEdge())
             _camera.Scale *= ScrollScaleM;
-        if (InputHelper.RisingEdge(Keys.OemMinus))
+        if (Keys.OemMinus.RisingEdge())
             _camera.Scale /= ScrollScaleM;
 
-        if (InputHelper.Down(MouseButton.Left) && _dragStartWorld is null)
+        if (MouseButton.Left.Down() && _dragStartWorld is null)
             _camera.Position -= (InputHelper.PrevMouseState.Position.ToVector2() - InputHelper.MouseLocation.ToVector2()) / _camera.Scale;
     }
 
