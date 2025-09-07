@@ -147,8 +147,9 @@ public class MainSimulation : IScreen
 
         if (_dragStartUi is null)
         {
+#if !BLAZORGL
             Mouse.SetCursor(MouseCursor.Arrow);
-
+#endif
             Rectangle rightBar = new Rectangle(sidebar.Right, sidebar.Top, 0, sidebar.Height);
             rightBar.Inflate(6, 6);
 
@@ -165,8 +166,11 @@ public class MainSimulation : IScreen
                 _ => default,
             };
 
+#if !BLAZORGL
+
             if (cursor is not null)
                 Mouse.SetCursor(cursor);
+#endif
 
             if (_dragReason != default && InputHelper.RisingEdge(MouseButton.Left))
             {

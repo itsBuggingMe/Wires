@@ -1,24 +1,27 @@
-﻿using Apos.Shapes;
-using Microsoft.JSInterop;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Wires.Core;
+using Apos.Shapes;
 
 namespace Wires;
 
 public class WiresGame : Game
 {
     private readonly GraphicsDeviceManager _graphics;
-    private readonly IJSRuntime _jsruntime;
 
-    public WiresGame(IJSRuntime jSRuntime)
+    public WiresGame()
     {
-        _jsruntime = jSRuntime;
         _graphics = new GraphicsDeviceManager(this)
         {
             GraphicsProfile = GraphicsProfile.HiDef,
+#if !BLAZORGL
+            PreferredBackBufferHeight = 720,
+            PreferredBackBufferWidth = 1280,
+#endif
         };
-        Content.RootDirectory = "Content";
+            Content.RootDirectory = "Content";
+        IsMouseVisible = true;
+
     }
 
     protected override void Initialize()
@@ -35,14 +38,11 @@ public class WiresGame : Game
             .Add(_graphics.GraphicsDevice)
 
             .Add(new Camera2D(_graphics.GraphicsDevice))
-            .Add(new ShapeBatch(_graphics.GraphicsDevice, Content))
             .Add(new Time())
 
             .Add(graphics)
             .Add(graphics.SpriteBatch)
             .Add(graphics.WhitePixel)
-
-            .Add(_jsruntime)
 
             .Add(this)
             ;

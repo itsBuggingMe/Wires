@@ -1,5 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using System.Xml.Linq;
 
 namespace Wires.Core;
 
@@ -7,22 +8,10 @@ public class Camera2D
 {
     public Matrix View
     {
-        get
-        {
-            Vector3 origin = new Vector3(
-                NormalizedOrigin.X * _graphicsDevice.Viewport.Width,
-                NormalizedOrigin.Y * _graphicsDevice.Viewport.Height,
-                0);
-
-            Matrix view =
-                Matrix.CreateTranslation(-origin) *
-                Matrix.CreateScale(Scale.X, Scale.Y, 1) *
-                Matrix.CreateRotationZ(-Rotation) *
-                Matrix.CreateTranslation(Position.X, Position.Y, 0) * 
-                Matrix.CreateTranslation(origin);
-
-            return view;
-        }
+        get => Matrix.CreateTranslation(Position.X, Position.Y, 0) *
+            Matrix.CreateScale(Scale.X, Scale.X, 1) *
+            Matrix.CreateTranslation(_graphicsDevice.Viewport.Width * NormalizedOrigin.X, _graphicsDevice.Viewport.Height * NormalizedOrigin.Y, 0)
+        ;
     }
 
     public Matrix Projection => Matrix.CreateOrthographicOffCenter(
@@ -36,7 +25,6 @@ public class Camera2D
     public Vector2 Position { get; set; }
     public Vector2 Scale { get; set; }
     public Vector2 NormalizedOrigin { get; set; }
-    public float Rotation { get; set; }
 
     public Camera2D(GraphicsDevice graphicsDevice, Vector2? scale = null, Vector2? originNorm = null)
     {

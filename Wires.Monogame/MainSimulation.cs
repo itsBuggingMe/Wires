@@ -135,7 +135,8 @@ public class MainSimulation : IScreen
                         _selectedSim = index;
                         if(_components[index].World is Simulation simulation)
                         {
-                            _camera.Position = new Vector2(-Step) * new Vector2(simulation.Width, simulation.Height) / 2 + _graphics.GraphicsDevice.Viewport.Bounds.Size.ToVector2() / 2;
+                            _camera.Position = new Vector2(Step * simulation.Width, Step * simulation.Height) * -0.5f + new Vector2(Step * 0.5f)
+                                + Vector2.UnitX * _windowSize.X * 0.5f;
                         }
                     }
                 }
@@ -205,6 +206,7 @@ public class MainSimulation : IScreen
                     _playState = PlayButtonState.Pause;
                     _testCaseTimer = 0;
                     _currentTestCaseIndex = 0;
+                    _components[_selectedSim].Blueprint.Custom?.ClearAllDelayValues();
                     TestTestCase();
                     break;
                 case PlayButtonState.Pause:

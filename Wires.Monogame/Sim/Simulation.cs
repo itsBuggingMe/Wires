@@ -115,7 +115,8 @@ public class Simulation
             {
                 if (ConnectedToAnOutput(component.Position))
                     continue;
-                //_workList.Enqueue(new WorkItem(component.Position + offset, PowerState.OnState, id));
+
+                _workList.Enqueue(new WorkItem(component.Position + offset, PowerState.OffState, id));
                 break;
                 // only need to update 1 input
             }
@@ -190,6 +191,8 @@ public class Simulation
                     for(int i = 0; i < component.Blueprint.Inputs.Length; i++)
                         component.Blueprint.InputBuffer(i) = PowerStateAt(component.GetInputPosition(i));
 
+                    component.Blueprint.OutputBufferRaw.AsSpan().Clear();
+
                     component.Blueprint.StepStateful();
 
                     for (int i = 0; i < component.Blueprint.Outputs.Length; i++)
@@ -222,6 +225,10 @@ public class Simulation
         void VisitWire(WireNode wireNode, int componentId, PowerState state)
         {
             ref Wire wire = ref _wires[wireNode.Id];
+
+            if (wire.LastVisitComponentId == componentId && wire.PowerState == state)
+                return;
+            
             wire.LastVisitComponentId = componentId;
             wire.PowerState = state;
 

@@ -30,7 +30,11 @@
     <Compile Include="..\Wires.Monogame\Sim\*">
       <Link>Sim\%(RecursiveDir)%(FileName)%(Extension)</Link>
     </Compile>
-    <Compile Include="*.cs"/>
+    <Compile Include="Pages\Index.razor.cs"/>
+    <Compile Include="Constants.cs"/>
+    <Compile Include="WiresGame.cs"/>
+    <Compile Include="MainSimulation.cs"/>
+    <Compile Include="Program.cs"/>
   </ItemGroup>
 
   <ItemGroup>
