@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using Microsoft.Xna.Framework;
@@ -9,10 +10,31 @@ using Wires.Core;
 namespace Wires.Sim;
 public class Blueprint
 {
-    [InlineArray(4)]
+    //[InlineArray(4)]
     private struct InlineArray4<T>
     {
         private T _0;
+        private T _1;
+        private T _2;
+        private T _3;
+
+        [UnscopedRef]
+        public ref T this[int index]
+        {
+            get
+            {
+                if (index == 0)
+                    return ref _0;
+                if (index == 1)
+                    return ref _1;
+                if (index == 2)
+                    return ref _2;
+                if (index == 3)
+                    return ref _3;
+
+                throw new ArgumentOutOfRangeException();
+            }
+        }
     }
 
     private record class BlueprintFlyweight(
@@ -135,6 +157,7 @@ public class Blueprint
         Color? ssColor = isShortCircuit ? Color.DarkGoldenrod : null;
 
         int rotation = (rotationOverride ?? Rotation) & 3;
+
         foreach ((Point offset, TileKind kind) in _data.Displays[rotation].AsSpan())
         {
             Point tilePos = pos + offset;

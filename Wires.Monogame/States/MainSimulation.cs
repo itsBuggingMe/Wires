@@ -316,7 +316,7 @@ public class MainSimulation : IScreen
         if(MouseButton.Left.Down() && _dragStartWorld is Point && _simDragReason == SimDragReason.MoveComponent)
         {
             sim.MoveComponent(_draggedComponentId, tileOver);
-            ResetSimulation();
+            //ResetSimulation();
         }
 
         if (MouseButton.Right.FallingEdge())

@@ -385,27 +385,27 @@ public class Simulation
             }
         }
 
-        foreach(var element in component.Blueprint.Display)
-        {
-            if(element.Kind is TileKind.Output or TileKind.Input)
-            {
-                Point oldWirePos = component.Position + element.Offset;
-                // all separate to avoid messing up the data structures
-                foreach(var node in WiresAt(oldWirePos))
-                {
-                    _wiresToMove.PushRef() = (node.To, oldWirePos + delta, node.Id);
-                }
-            }
-        }
-
-        foreach (var wire in _wiresToMove.AsSpan())
-        {
-            DestroyWire(wire.Id);
-        }
-        while (_wiresToMove.TryPop(out var x))
-        {
-            CreateWire(new Wire(x.A, x.B));
-        }
+        //foreach(var element in component.Blueprint.Display)
+        //{
+        //    if(element.Kind is TileKind.Output or TileKind.Input)
+        //    {
+        //        Point oldWirePos = component.Position + element.Offset;
+        //        // all separate to avoid messing up the data structures
+        //        foreach(var node in WiresAt(oldWirePos))
+        //        {
+        //            _wiresToMove.PushRef() = (node.To, oldWirePos + delta, node.Id);
+        //        }
+        //    }
+        //}
+        //
+        //foreach (var wire in _wiresToMove.AsSpan())
+        //{
+        //    DestroyWire(wire.Id);
+        //}
+        //while (_wiresToMove.TryPop(out var x))
+        //{
+        //    CreateWire(new Wire(x.A, x.B));
+        //}
 
         foreach (var element in component.Blueprint.Display)
         {

@@ -1,6 +1,7 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 using System;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
@@ -59,25 +60,39 @@ public class ScreenManager : IGameComponent, IUpdateable, IDrawable
 
     public void Update(GameTime gameTime)
     {
-        InputHelper.TickUpdate(_game.IsActive);
-        ThrowIfNotInitalized(out IScreen current);
-
-        if (InputHelper.RisingEdge(Keys.R) && InputHelper.Down(Keys.LeftControl))
+        try
         {
-            var arg = current.OnExit();
-            var next = _current = _firstFactory(_services);
-            next.OnEnter(current, arg);
-        }
+            InputHelper.TickUpdate(_game.IsActive);
+            ThrowIfNotInitalized(out IScreen current);
 
-        _shared.SetValues(gameTime);
-        current.Update(_shared);
+            if (InputHelper.RisingEdge(Keys.R) && InputHelper.Down(Keys.LeftControl))
+            {
+                var arg = current.OnExit();
+                var next = _current = _firstFactory(_services);
+                next.OnEnter(current, arg);
+            }
+
+            _shared.SetValues(gameTime);
+            current.Update(_shared);
+        }
+        catch(Exception e)
+        {
+            Debugger.Break();
+        }
     }
 
     public void Draw(GameTime gameTime)
     {
-        ThrowIfNotInitalized(out IScreen current);
-        _shared.SetValues(gameTime);
-        current.Draw(_shared);
+        try
+        {
+            ThrowIfNotInitalized(out IScreen current);
+            _shared.SetValues(gameTime);
+            current.Draw(_shared);
+        }
+        catch (Exception e)
+        {
+            Debugger.Break();
+        }
     }
 
     public void SwitchScreen<T>()
