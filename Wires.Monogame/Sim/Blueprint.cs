@@ -202,12 +202,12 @@ public class Blueprint
     public static readonly Blueprint Output = new([
         (new Point(0, 0), TileKind.Component),
         (new Point(-1, 0), TileKind.Input),
-    ], "Out", IntrinsicBlueprint.Output);
+    ], "Output", IntrinsicBlueprint.Output);
 
     public static readonly Blueprint Input = new([
         (new Point(0, 0), TileKind.Component),
         (new Point(1, 0), TileKind.Output),
-    ], "In", IntrinsicBlueprint.Input);
+    ], "Input", IntrinsicBlueprint.Input);
 
     public static readonly Blueprint Delay = new([
         (new Point(0, 0), TileKind.Component),

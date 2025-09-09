@@ -1,6 +1,7 @@
 using Microsoft.JSInterop;
 using Microsoft.Xna.Framework;
 using System;
+using Wires.Sim.Saving;
 
 namespace Wires.Pages;
 public partial class Index
@@ -23,6 +24,7 @@ public partial class Index
         // init game
         if (_game == null)
         {
+            Levels.JSRuntimeInstance = JsRuntime;
             _game = new WiresGame();
             _game.Run();
         }

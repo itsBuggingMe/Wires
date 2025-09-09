@@ -62,11 +62,8 @@ public class MainSimulation : IScreen
         _sb = graphics.ShapeBatch;
 
         _components.Add(new(Blueprint.NAND));
-        _components.Add(new(Blueprint.Delay));
-        _components.Add(new(Blueprint.On));
-        _components.Add(new(Blueprint.Off));
 
-        //_components.AddRange(Levels.LoadLevels(_components));
+        _components.AddRange(Levels.LoadLevels(_components));
 
         _windowSize = new(_graphics.GraphicsDevice.Viewport.Width * 0.1f, _graphics.GraphicsDevice.Viewport.Height - 2 * Padding);
     }
@@ -96,14 +93,23 @@ public class MainSimulation : IScreen
 
     private void UpdateInputs()
     {
-        if (InputHelper.Down(Keys.LeftControl))
+        if (InputHelper.Down(Keys.LeftAlt))
         {
-            if (InputHelper.Down(Keys.L))
+            if (InputHelper.RisingEdge(Keys.L))
             {
-                LevelModel[] models = JsonSerializer.Deserialize<LevelModel[]>(Levels.LoadLocalData()) ?? [];
-                _components.AddRange(Levels.CreateComponentEntriesFromModels(_components, models));
+                Levels.LoadLocalData(s =>
+                {
+                    LevelModel[] models = JsonSerializer.Deserialize<LevelModel[]>(s) ?? [];
+                    _components.Clear();
+                    _components.Add(new(Blueprint.NAND));
+                    _components.Add(new(Blueprint.Delay));
+                    _components.Add(new(Blueprint.On));
+                    _components.Add(new(Blueprint.Off));
+                    _components.AddRange(Levels.CreateComponentEntriesFromModels(_components, models));
+                    ResetSimulation();
+                });
             }
-            else if (InputHelper.Down(Keys.S))
+            else if (InputHelper.RisingEdge(Keys.S))
             {
                 Levels.SaveLocalData(Levels.SerializeComponentEntries(_components));
             }

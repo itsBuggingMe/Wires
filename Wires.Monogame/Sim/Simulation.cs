@@ -58,6 +58,21 @@ public class Simulation
         }
     }
 
+    public IEnumerable<Wire> Wires
+    {
+        get
+        {
+            for (int i = 0; i < _wires.Max; i++)
+            {
+                var c = _wires[i];
+                if (c.Exists)
+                {
+                    yield return c;
+                }
+            }
+        }
+    }
+
     public int InputCount
     {
         get

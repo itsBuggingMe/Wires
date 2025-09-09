@@ -73,12 +73,12 @@
     <script src="_content/nkast.Wasm.XR/js/XR.8.0.5.js"></script>
 
     <script>
-        async function getClipboard() {
+        window.getClipboard = async () => {
             const text = await navigator.clipboard.readText();
-            return text;
+            DotNet.invokeMethod('Wires', 'ClipboardFound', text);
         }
 
-        async function setClipload(value) {
+        window.setClipboard = async (textToCopy) => {
             if (navigator?.clipboard?.writeText) {
                 await navigator.clipboard.writeText(textToCopy);
             }

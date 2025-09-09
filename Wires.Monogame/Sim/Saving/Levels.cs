@@ -2,6 +2,7 @@
 using Microsoft.JSInterop;
 #endif
 using Microsoft.Xna.Framework;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
@@ -12,10 +13,24 @@ using System.Text.Json;
 
 namespace Wires.Sim.Saving;
 
+#if BLAZORGL
+public static class ClipboardUtils
+{
+    public static Action<string>? OnClipboardLoad;
+    [JSInvokable]
+    public static void ClipboardFound(string data)
+    {
+        OnClipboardLoad?.Invoke(data);
+        OnClipboardLoad = null;
+    }
+}
+#endif
+
 internal static class Levels
 {
 #if BLAZORGL
     public static IJSRuntime JSRuntimeInstance { get; set; } = null!;
+
 #else
     const string Path = "save.txt";
 #endif
@@ -24,12 +39,23 @@ internal static class Levels
     private static PowerState Off => PowerState.OffState;
 
 
-    public static string LoadLocalData()
+
+    public static void LoadLocalData(Action<string> onLoad)
     {
 #if BLAZORGL
-        return JSRuntimeInstance.InvokeAsync<string>("getClipboard").Result;
+        ClipboardUtils.OnClipboardLoad = onLoad;
+        JSRuntimeInstance.InvokeAsync<string>("getClipboard");
 #else
-        return File.Exists(Path) ? File.ReadAllText("save.txt") : string.Empty;
+        onLoad(File.Exists(Path) ? File.ReadAllText("save.txt") : string.Empty);
+#endif
+    }
+
+    public static void SaveLocalData(string s)
+    {
+#if BLAZORGL
+        JSRuntimeInstance.InvokeVoidAsync("setClipboard", s);
+#else
+        File.WriteAllText(Path, s);
 #endif
     }
 
@@ -63,27 +89,33 @@ internal static class Levels
                 TestCases = c.TestCases?.Enumerable?
                     .Select(i => new TestCaseModel
                     {
-                        Inputs = i.Input.Select(c => c.Values).ToArray(),
-                        Outputs = i.Output.Select(c => c.Values).ToArray(),
+                        Inputs = i.Input.Select(c => (int)c.Values).ToArray(),
+                        Outputs = i.Output.Select(c => (int)c.Values).ToArray(),
                     }).ToArray() ?? [],
+                Wires = c.Custom!.Wires
+                    .Select(w => new WireModel
+                    {
+                        AX = w.A.X,
+                        AY = w.A.Y,
+                        BX = w.B.X,
+                        BY = w.B.Y,
+                    })
+                    .ToArray(),
             })
             .ToArray();
 
         return JsonSerializer.Serialize(models);
     }
 
-    public static void SaveLocalData(string s)
+    public static void LoadFromJson(List<ComponentEntry> existingEntries, string json)
     {
-#if BLAZORGL
-        _ = JSRuntimeInstance.InvokeVoidAsync("setClipload", s);
-#else
-        File.WriteAllText(Path, s);
-#endif
+        var models = JsonSerializer.Deserialize<LevelModel[]>(json);
+        existingEntries.AddRange(CreateComponentEntriesFromModels(existingEntries, models ?? []));
     }
 
     public static IEnumerable<ComponentEntry> LoadLevels(List<ComponentEntry> existingEntries)
     {
-        using Stream stream = new MemoryStream(Encoding.UTF8.GetBytes(LevelsJson));
+        using Stream stream = new MemoryStream(Encoding.UTF8.GetBytes(Day1Levels));
         LevelModel[] levels = JsonSerializer.Deserialize<LevelModel[]>(stream) ?? [];
         return CreateComponentEntriesFromModels(existingEntries, levels);
     }
@@ -98,18 +130,23 @@ internal static class Levels
             {
                 simulation.Place(component.BlueprintName switch
                 {
-                    "Input" => Blueprint.Input,
-                    "Output" => Blueprint.Output,
+                    nameof(Blueprint.Input) => Blueprint.Input,
+                    nameof(Blueprint.Output) => Blueprint.Output,
                     _ => existingEntries.FirstOrDefault(m => m.Name == component.BlueprintName)?.Blueprint ??
                         throw new System.Exception($"Could not find blueprint of name: {component.BlueprintName}")
                 }, new(component.X, component.Y), component.Rotation, component.AllowDelete, component.InputOutputId ?? 0);
             }
 
+            foreach (var wire in m.Wires ?? [])
+            {
+                simulation.CreateWire(new Wire(new(wire.AX, wire.AY), new(wire.BX, wire.BY)));
+            }
+
             TestCases? testCases = m.TestCases.Length == 0 ? null :
                 new TestCases(
                     m.TestCases.Select(t =>
-                        (t.Inputs.Select(i => new PowerState(i)).ToArray(),
-                        t.Outputs.Select(i => new PowerState(i)).ToArray())
+                        (t.Inputs.Select(i => new PowerState((byte)i)).ToArray(),
+                        t.Outputs.Select(i => new PowerState((byte)i)).ToArray())
                         ).ToArray());
 
             return new ComponentEntry(new Blueprint(simulation, m.Name,
@@ -123,6 +160,264 @@ internal static class Levels
                 testCases);
         });
     }
+
+    public const string Day1Levels =
+        """
+        [
+          {
+            "GridWidth": 9,
+            "GridHeight": 9,
+            "Name": "NOT",
+            "Components": [
+              {
+                "BlueprintName": "Input",
+                "X": 0,
+                "Y": 4,
+                "AllowDelete": false,
+                "InputOutputId": 0
+              },
+              {
+                "BlueprintName": "Output",
+                "X": 8,
+                "Y": 4,
+                "AllowDelete": false,
+                "InputOutputId": 0
+              }
+            ],
+            "ComponentTiles": [
+              {
+                "X": -1,
+                "Y": 0,
+                "TileKind": "Input"
+              },
+              {
+                "X": 0,
+                "Y": 0,
+                "TileKind": "Component"
+              },
+              {
+                "X": 1,
+                "Y": 0,
+                "TileKind": "Output"
+              }
+            ],
+            "TestCases": [
+              {
+                "Inputs": [ 1 ],
+                "Outputs": [ 0 ]
+              },
+              {
+                "Inputs": [ 0 ],
+                "Outputs": [ 1 ]
+              }
+            ]
+          },
+          {
+            "GridWidth": 9,
+            "GridHeight": 9,
+            "Name": "AND",
+            "Components": [
+              {
+                "BlueprintName": "Input",
+                "X": 0,
+                "Y": 0,
+                "AllowDelete": false,
+                "InputOutputId": 0
+              },
+              {
+                "BlueprintName": "Input",
+                "X": 0,
+                "Y": 8,
+                "AllowDelete": false,
+                "InputOutputId": 1
+              },
+              {
+                "BlueprintName": "Output",
+                "X": 8,
+                "Y": 4,
+                "AllowDelete": false,
+                "InputOutputId": 0
+              }
+            ],
+            "ComponentTiles": [
+              {
+                "X": -1,
+                "Y": 1,
+                "TileKind": "Input"
+              },
+              {
+                "X": -1,
+                "Y": -1,
+                "TileKind": "Input"
+              },
+              {
+                "X": 0,
+                "Y": 0,
+                "TileKind": "Component"
+              },
+              {
+                "X": 1,
+                "Y": 0,
+                "TileKind": "Output"
+              }
+            ],
+            "TestCases": [
+              {
+                "Inputs": [ 1, 1 ],
+                "Outputs": [ 1 ]
+              },
+              {
+                "Inputs": [ 0, 1 ],
+                "Outputs": [ 0 ]
+              },
+              {
+                "Inputs": [ 1, 0 ],
+                "Outputs": [ 0 ]
+              },
+              {
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 0 ]
+              }
+            ]
+          },
+          {
+            "GridWidth": 9,
+            "GridHeight": 9,
+            "Name": "OR",
+            "Components": [
+              {
+                "BlueprintName": "Input",
+                "X": 0,
+                "Y": 0,
+                "AllowDelete": false,
+                "InputOutputId": 0
+              },
+              {
+                "BlueprintName": "Input",
+                "X": 0,
+                "Y": 8,
+                "AllowDelete": false,
+                "InputOutputId": 1
+              },
+              {
+                "BlueprintName": "Output",
+                "X": 8,
+                "Y": 4,
+                "AllowDelete": false,
+                "InputOutputId": 0
+              }
+            ],
+            "ComponentTiles": [
+              {
+                "X": -1,
+                "Y": 1,
+                "TileKind": "Input"
+              },
+              {
+                "X": -1,
+                "Y": -1,
+                "TileKind": "Input"
+              },
+              {
+                "X": 0,
+                "Y": 0,
+                "TileKind": "Component"
+              },
+              {
+                "X": 1,
+                "Y": 0,
+                "TileKind": "Output"
+              }
+            ],
+            "TestCases": [
+              {
+                "Inputs": [ 1, 1 ],
+                "Outputs": [ 1 ]
+              },
+              {
+                "Inputs": [ 0, 1 ],
+                "Outputs": [ 1 ]
+              },
+              {
+                "Inputs": [ 1, 0 ],
+                "Outputs": [ 1 ]
+              },
+              {
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 0 ]
+              }
+            ]
+          },
+          {
+            "GridWidth": 9,
+            "GridHeight": 9,
+            "Name": "NOR",
+            "Components": [
+              {
+                "BlueprintName": "Input",
+                "X": 0,
+                "Y": 0,
+                "AllowDelete": false,
+                "InputOutputId": 0
+              },
+              {
+                "BlueprintName": "Input",
+                "X": 0,
+                "Y": 8,
+                "AllowDelete": false,
+                "InputOutputId": 1
+              },
+              {
+                "BlueprintName": "Output",
+                "X": 8,
+                "Y": 4,
+                "AllowDelete": false,
+                "InputOutputId": 0
+              }
+            ],
+            "ComponentTiles": [
+              {
+                "X": -1,
+                "Y": 1,
+                "TileKind": "Input"
+              },
+              {
+                "X": -1,
+                "Y": -1,
+                "TileKind": "Input"
+              },
+              {
+                "X": 0,
+                "Y": 0,
+                "TileKind": "Component"
+              },
+              {
+                "X": 1,
+                "Y": 0,
+                "TileKind": "Output"
+              }
+            ],
+            "TestCases": [
+              {
+                "Inputs": [ 1, 1 ],
+                "Outputs": [ 0 ]
+              },
+              {
+                "Inputs": [ 0, 1 ],
+                "Outputs": [ 0 ]
+              },
+              {
+                "Inputs": [ 1, 0 ],
+                "Outputs": [ 0 ]
+              },
+              {
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 1 ]
+              }
+            ]
+          }
+        ]
+        """;
 
     private const string LevelsJson =
         """
