@@ -1,4 +1,7 @@
-﻿using Microsoft.Xna.Framework;
+﻿#if BLAZORGL
+using Microsoft.JSInterop;
+#endif
+using Microsoft.Xna.Framework;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
@@ -7,54 +10,123 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 
-namespace Wires.Sim;
+namespace Wires.Sim.Saving;
+
 internal static class Levels
 {
+#if BLAZORGL
+    public static IJSRuntime JSRuntimeInstance { get; set; } = null!;
+#else
+    const string Path = "save.txt";
+#endif
+
     private static PowerState On => PowerState.OnState;
     private static PowerState Off => PowerState.OffState;
+
+
+    public static string LoadLocalData()
+    {
+#if BLAZORGL
+        return JSRuntimeInstance.InvokeAsync<string>("getClipboard").Result;
+#else
+        return File.Exists(Path) ? File.ReadAllText("save.txt") : string.Empty;
+#endif
+    }
+
+    public static string SerializeComponentEntries(List<ComponentEntry> simulations)
+    {
+        LevelModel[] models = simulations.Where(c => c.Custom is not null)
+            .Select(c => new LevelModel
+            {
+                GridWidth = c.Custom!.Width,
+                GridHeight = c.Custom!.Height,
+                Name = c.Name,
+                Components = c.Custom!.Components
+                    .Select(c => new ComponentModel
+                    {
+                        BlueprintName = c.Blueprint.Text,
+                        X = c.Position.X,
+                        Y = c.Position.Y,
+                        AllowDelete = c.AllowDelete,
+                        InputOutputId = c.InputOutputId,
+                        Rotation = c.Blueprint.Rotation,
+                    }).ToArray(),
+                ComponentTiles = c.Blueprint
+                    .Display
+                    .Select(d => new ComponentTileModel
+                    {
+                        TileKind = d.Kind.ToString(),
+                        X = d.Offset.X,
+                        Y = d.Offset.Y,
+                    })
+                    .ToArray(),
+                TestCases = c.TestCases?.Enumerable?
+                    .Select(i => new TestCaseModel
+                    {
+                        Inputs = i.Input.Select(c => c.Values).ToArray(),
+                        Outputs = i.Output.Select(c => c.Values).ToArray(),
+                    }).ToArray() ?? [],
+            })
+            .ToArray();
+
+        return JsonSerializer.Serialize(models);
+    }
+
+    public static void SaveLocalData(string s)
+    {
+#if BLAZORGL
+        _ = JSRuntimeInstance.InvokeVoidAsync("setClipload", s);
+#else
+        File.WriteAllText(Path, s);
+#endif
+    }
 
     public static IEnumerable<ComponentEntry> LoadLevels(List<ComponentEntry> existingEntries)
     {
         using Stream stream = new MemoryStream(Encoding.UTF8.GetBytes(LevelsJson));
         LevelModel[] levels = JsonSerializer.Deserialize<LevelModel[]>(stream) ?? [];
+        return CreateComponentEntriesFromModels(existingEntries, levels);
+    }
 
-            return levels.Select(m =>
+    public static IEnumerable<ComponentEntry> CreateComponentEntriesFromModels(List<ComponentEntry> existingEntries, LevelModel[] levels)
+    {
+        return levels.Select(m =>
+        {
+            Simulation simulation = new Simulation(m.GridWidth, m.GridHeight);
+
+            foreach (var component in m.Components)
             {
-                Simulation simulation = new Simulation(m.GridWidth, m.GridHeight);
-
-                foreach(var component in m.Components)
+                simulation.Place(component.BlueprintName switch
                 {
-                    simulation.Place(component.BlueprintName switch
-                    {
-                        "Input" => Blueprint.Input,
-                        "Output" => Blueprint.Output,
-                        _ => existingEntries.FirstOrDefault(m => m.Name == component.BlueprintName)?.Blueprint ?? 
-                            throw new System.Exception($"Could not find blueprint of name: {component.BlueprintName}")
-                    }, new(component.X, component.Y), component.Rotation, component.AllowDelete, component.InputOutputId ?? 0);
-                }
+                    "Input" => Blueprint.Input,
+                    "Output" => Blueprint.Output,
+                    _ => existingEntries.FirstOrDefault(m => m.Name == component.BlueprintName)?.Blueprint ??
+                        throw new System.Exception($"Could not find blueprint of name: {component.BlueprintName}")
+                }, new(component.X, component.Y), component.Rotation, component.AllowDelete, component.InputOutputId ?? 0);
+            }
 
-                TestCases? testCases = m.TestCases.Length == 0 ? null : 
-                    new TestCases(
-                        m.TestCases.Select(t => 
-                            (t.Inputs.Select(i => i ? On : Off).ToArray(), 
-                            t.Outputs.Select(i => i ? On : Off).ToArray())
-                            ).ToArray());
+            TestCases? testCases = m.TestCases.Length == 0 ? null :
+                new TestCases(
+                    m.TestCases.Select(t =>
+                        (t.Inputs.Select(i => new PowerState(i)).ToArray(),
+                        t.Outputs.Select(i => new PowerState(i)).ToArray())
+                        ).ToArray());
 
-                return new ComponentEntry(new Blueprint(simulation, m.Name,
-                    m.ComponentTiles.Select(t => (new Point(t.X, t.Y), t.TileKind switch
-                    {
-                        nameof(TileKind.Input) => TileKind.Input,
-                        nameof(TileKind.Output) => TileKind.Output,
-                        nameof(TileKind.Component) => TileKind.Component,
-                        _ => throw new System.Exception($"Unknown tile kind: {t.TileKind}")
-                    })).ToImmutableArray()),
-                    testCases);
+            return new ComponentEntry(new Blueprint(simulation, m.Name,
+                m.ComponentTiles.Select(t => (new Point(t.X, t.Y), t.TileKind switch
+                {
+                    nameof(TileKind.Input) => TileKind.Input,
+                    nameof(TileKind.Output) => TileKind.Output,
+                    nameof(TileKind.Component) => TileKind.Component,
+                    _ => throw new System.Exception($"Unknown tile kind: {t.TileKind}")
+                })).ToImmutableArray()),
+                testCases);
         });
     }
 
     private const string LevelsJson =
         """
-                [
+        [
           {
             "GridWidth": 9,
             "GridHeight": 9,
@@ -94,12 +166,12 @@ internal static class Levels
             ],
             "TestCases": [
               {
-                "Inputs": [ true ],
-                "Outputs": [ false ]
+                "Inputs": [ 1 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ false ],
-                "Outputs": [ true ]
+                "Inputs": [ 0 ],
+                "Outputs": [ 1 ]
               }
             ]
           },
@@ -154,20 +226,20 @@ internal static class Levels
             ],
             "TestCases": [
               {
-                "Inputs": [ true, true ],
-                "Outputs": [ true ]
+                "Inputs": [ 1, 1 ],
+                "Outputs": [ 1 ]
               },
               {
-                "Inputs": [ false, true ],
-                "Outputs": [ false ]
+                "Inputs": [ 0, 1 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ true, false ],
-                "Outputs": [ false ]
+                "Inputs": [ 1, 0 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ false, false ],
-                "Outputs": [ false ]
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 0 ]
               }
             ]
           },
@@ -222,20 +294,20 @@ internal static class Levels
             ],
             "TestCases": [
               {
-                "Inputs": [ true, true ],
-                "Outputs": [ true ]
+                "Inputs": [ 1, 1 ],
+                "Outputs": [ 1 ]
               },
               {
-                "Inputs": [ false, true ],
-                "Outputs": [ true ]
+                "Inputs": [ 0, 1 ],
+                "Outputs": [ 1 ]
               },
               {
-                "Inputs": [ true, false ],
-                "Outputs": [ true ]
+                "Inputs": [ 1, 0 ],
+                "Outputs": [ 1 ]
               },
               {
-                "Inputs": [ false, false ],
-                "Outputs": [ false ]
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 0 ]
               }
             ]
           },
@@ -290,20 +362,20 @@ internal static class Levels
             ],
             "TestCases": [
               {
-                "Inputs": [ true, true ],
-                "Outputs": [ false ]
+                "Inputs": [ 1, 1 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ false, true ],
-                "Outputs": [ false ]
+                "Inputs": [ 0, 1 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ true, false ],
-                "Outputs": [ false ]
+                "Inputs": [ 1, 0 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ false, false ],
-                "Outputs": [ true ]
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 1 ]
               }
             ]
           },
@@ -358,20 +430,20 @@ internal static class Levels
             ],
             "TestCases": [
               {
-                "Inputs": [ true, true ],
-                "Outputs": [ false ]
+                "Inputs": [ 1, 1 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ false, true ],
-                "Outputs": [ true ]
+                "Inputs": [ 0, 1 ],
+                "Outputs": [ 1 ]
               },
               {
-                "Inputs": [ true, false ],
-                "Outputs": [ true ]
+                "Inputs": [ 1, 0 ],
+                "Outputs": [ 1 ]
               },
               {
-                "Inputs": [ false, false ],
-                "Outputs": [ false ]
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 0 ]
               }
             ]
           },
@@ -426,20 +498,20 @@ internal static class Levels
             ],
             "TestCases": [
               {
-                "Inputs": [ true, true ],
-                "Outputs": [ true ]
+                "Inputs": [ 1, 1 ],
+                "Outputs": [ 1 ]
               },
               {
-                "Inputs": [ false, true ],
-                "Outputs": [ false ]
+                "Inputs": [ 0, 1 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ true, false ],
-                "Outputs": [ false ]
+                "Inputs": [ 1, 0 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ false, false ],
-                "Outputs": [ true ]
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 1 ]
               }
             ]
           },
@@ -494,12 +566,12 @@ internal static class Levels
             ],
             "TestCases": [
               {
-                "Inputs": [ false ],
-                "Outputs": [ true, false ]
+                "Inputs": [ 0 ],
+                "Outputs": [ 1, 0 ]
               },
               {
-                "Inputs": [ true ],
-                "Outputs": [ false, true ]
+                "Inputs": [ 1 ],
+                "Outputs": [ 0, 1 ]
               }
             ]
           },
@@ -651,36 +723,36 @@ internal static class Levels
             ],
             "TestCases": [
               {
-                "Inputs": [ false, false, false ],
-                "Outputs": [ true, false, false, false, false, false, false, false ]
+                "Inputs": [ 0, 0, 0 ],
+                "Outputs": [ 1, 0, 0, 0, 0, 0, 0, 0 ]
               },
               {
-                "Inputs": [ false, false, true ],
-                "Outputs": [ false, true, false, false, false, false, false, false ]
+                "Inputs": [ 0, 0, 1 ],
+                "Outputs": [ 0, 1, 0, 0, 0, 0, 0, 0 ]
               },
               {
-                "Inputs": [ false, true, false ],
-                "Outputs": [ false, false, true, false, false, false, false, false ]
+                "Inputs": [ 0, 1, 0 ],
+                "Outputs": [ 0, 0, 1, 0, 0, 0, 0, 0 ]
               },
               {
-                "Inputs": [ false, true, true ],
-                "Outputs": [ false, false, false, true, false, false, false, false ]
+                "Inputs": [ 0, 1, 1 ],
+                "Outputs": [ 0, 0, 0, 1, 0, 0, 0, 0 ]
               },
               {
-                "Inputs": [ true, false, false ],
-                "Outputs": [ false, false, false, false, true, false, false, false ]
+                "Inputs": [ 1, 0, 0 ],
+                "Outputs": [ 0, 0, 0, 0, 1, 0, 0, 0 ]
               },
               {
-                "Inputs": [ true, false, true ],
-                "Outputs": [ false, false, false, false, false, true, false, false ]
+                "Inputs": [ 1, 0, 1 ],
+                "Outputs": [ 0, 0, 0, 0, 0, 1, 0, 0 ]
               },
               {
-                "Inputs": [ true, true, false ],
-                "Outputs": [ false, false, false, false, false, false, true, false ]
+                "Inputs": [ 1, 1, 0 ],
+                "Outputs": [ 0, 0, 0, 0, 0, 0, 1, 0 ]
               },
               {
-                "Inputs": [ true, true, true ],
-                "Outputs": [ false, false, false, false, false, false, false, true ]
+                "Inputs": [ 1, 1, 1 ],
+                "Outputs": [ 0, 0, 0, 0, 0, 0, 0, 1 ]
               }
             ]
           },
@@ -712,19 +784,19 @@ internal static class Levels
             "TestCases": [
               {
                 "Inputs": [],
-                "Outputs": [ true ]
+                "Outputs": [ 1 ]
               },
               {
                 "Inputs": [],
-                "Outputs": [ false ]
+                "Outputs": [ 0 ]
               },
               {
                 "Inputs": [],
-                "Outputs": [ true ]
+                "Outputs": [ 1 ]
               },
               {
                 "Inputs": [],
-                "Outputs": [ false ]
+                "Outputs": [ 0 ]
               }
             ]
           },
@@ -779,40 +851,40 @@ internal static class Levels
             ],
             "TestCases": [
               {
-                "Inputs": [ false, false ],
-                "Outputs": [ false ]
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ true, true ],
-                "Outputs": [ false ]
+                "Inputs": [ 1, 1 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ false, false ],
-                "Outputs": [ true ]
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 1 ]
               },
               {
-                "Inputs": [ true, false ],
-                "Outputs": [ true ]
+                "Inputs": [ 1, 0 ],
+                "Outputs": [ 1 ]
               },
               {
-                "Inputs": [ false, false ],
-                "Outputs": [ false ]
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ true, true ],
-                "Outputs": [ false ]
+                "Inputs": [ 1, 1 ],
+                "Outputs": [ 0 ]
               },
               {
-                "Inputs": [ false, false ],
-                "Outputs": [ true ]
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 1 ]
               },
               {
-                "Inputs": [ true, false ],
-                "Outputs": [ true ]
+                "Inputs": [ 1, 0 ],
+                "Outputs": [ 1 ]
               },
               {
-                "Inputs": [ false, false ],
-                "Outputs": [ false ]
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 0 ]
               }
             ]
           },
@@ -879,20 +951,20 @@ internal static class Levels
             ],
             "TestCases": [
               {
-                "Inputs": [ false, false ],
-                "Outputs": [ false, false ]
+                "Inputs": [ 0, 0 ],
+                "Outputs": [ 0, 0 ]
               },
               {
-                "Inputs": [ false, true ],
-                "Outputs": [ true, false ]
+                "Inputs": [ 0, 1 ],
+                "Outputs": [ 1, 0 ]
               },
               {
-                "Inputs": [ true, false ],
-                "Outputs": [ true, false ]
+                "Inputs": [ 1, 0 ],
+                "Outputs": [ 1, 0 ]
               },
               {
-                "Inputs": [ true, true ],
-                "Outputs": [ false, true ]
+                "Inputs": [ 1, 1 ],
+                "Outputs": [ 0, 1 ]
               }
             ]
           },
@@ -971,36 +1043,36 @@ internal static class Levels
             ],
             "TestCases": [
               {
-                "Inputs": [ false, false, false ],
-                "Outputs": [ false, false ]
+                "Inputs": [ 0, 0, 0 ],
+                "Outputs": [ 0, 0 ]
               },
               {
-                "Inputs": [ false, false, true ],
-                "Outputs": [ true, false ]
+                "Inputs": [ 0, 0, 1 ],
+                "Outputs": [ 1, 0 ]
               },
               {
-                "Inputs": [ false, true, false ],
-                "Outputs": [ true, false ]
+                "Inputs": [ 0, 1, 0 ],
+                "Outputs": [ 1, 0 ]
               },
               {
-                "Inputs": [ false, true, true ],
-                "Outputs": [ false, true ]
+                "Inputs": [ 0, 1, 1 ],
+                "Outputs": [ 0, 1 ]
               },
               {
-                "Inputs": [ true, false, false ],
-                "Outputs": [ true, false ]
+                "Inputs": [ 1, 0, 0 ],
+                "Outputs": [ 1, 0 ]
               },
               {
-                "Inputs": [ true, false, true ],
-                "Outputs": [ false, true ]
+                "Inputs": [ 1, 0, 1 ],
+                "Outputs": [ 0, 1 ]
               },
               {
-                "Inputs": [ true, true, false ],
-                "Outputs": [ false, true ]
+                "Inputs": [ 1, 1, 0 ],
+                "Outputs": [ 0, 1 ]
               },
               {
-                "Inputs": [ true, true, true ],
-                "Outputs": [ true, true ]
+                "Inputs": [ 1, 1, 1 ],
+                "Outputs": [ 1, 1 ]
               }
             ]
           },
@@ -1187,24 +1259,24 @@ internal static class Levels
             ],
             "TestCases": [
               {
-                "Inputs": [ false, false, false, false, false, false, false, false, false ],
-                "Outputs": [ false, false, false, false, false ]
+                "Inputs": [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+                "Outputs": [ 0, 0, 0, 0, 0 ]
               },
               {
-                "Inputs": [ true, false, false, false, true, false, false, false, false ],
-                "Outputs": [ false, true, false, false, false ]
+                "Inputs": [ 1, 0, 0, 0, 1, 0, 0, 0, 0 ],
+                "Outputs": [ 0, 1, 0, 0, 0 ]
               },
               {
-                "Inputs": [ true, true, true, true, true, true, true, true, false ],
-                "Outputs": [ false, true, true, true, true ]
+                "Inputs": [ 1, 1, 1, 1, 1, 1, 1, 1, 0 ],
+                "Outputs": [ 0, 1, 1, 1, 1 ]
               },
               {
-                "Inputs": [ false, false, false, true, false, false, false, true, false ],
-                "Outputs": [ false, false, true, false, false ]
+                "Inputs": [ 0, 0, 0, 1, 0, 0, 0, 1, 0 ],
+                "Outputs": [ 0, 0, 1, 0, 0 ]
               },
               {
-                "Inputs": [ true, false, true, false, true, true, false, true, true ],
-                "Outputs": [ true, false, false, false, true ]
+                "Inputs": [ 1, 0, 1, 0, 1, 1, 0, 1, 1 ],
+                "Outputs": [ 1, 0, 0, 0, 1 ]
               }
             ]
           },
@@ -1317,37 +1389,6 @@ internal static class Levels
           }
         ]
         """;
-}
 
-internal class LevelModel
-{
-    public int GridWidth { get; init; }
-    public int GridHeight { get; init; }
-    public required string Name { get; init; }
-    public required ComponentModel[] Components { get; init; }
-    public required ComponentTileModel[] ComponentTiles { get; init; }
-    public required TestCaseModel[] TestCases { get; init; }
-}
 
-internal class ComponentTileModel
-{
-    public int X { get; init; }
-    public int Y { get; init; }
-    public required string TileKind { get; init; }
-}
-
-internal class TestCaseModel
-{
-    public required bool[] Inputs { get; init; }
-    public required bool[] Outputs { get; init; }
-}
-
-internal class ComponentModel
-{
-    public required string BlueprintName { get; init; }
-    public int X { get; init; }
-    public int Y { get; init; }
-    public bool AllowDelete { get; init; }
-    public int? InputOutputId { get; init; }
-    public int Rotation { get; set; }
 }

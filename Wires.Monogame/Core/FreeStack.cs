@@ -6,6 +6,7 @@ public struct FreeStack<T> where T : IFreeListId
 {
     private FastStack<T> _items;
     private int _freeHead;
+    private int _count;
 
     public FreeStack(int capacity = 16)
     {
@@ -13,7 +14,8 @@ public struct FreeStack<T> where T : IFreeListId
         _freeHead = -1;
     }
 
-    public int Count => _items.Count;
+    public int Count => _count;
+    public int Max => _items.Count;
 
     public ref T this[int index] => ref _items[index];
 
@@ -21,6 +23,7 @@ public struct FreeStack<T> where T : IFreeListId
 
     public ref T Create(out int id)
     {
+        _count++;
         if (_freeHead == -1)
         {
             id = _items.Count;
@@ -41,6 +44,7 @@ public struct FreeStack<T> where T : IFreeListId
 
     public void Destroy(int id)
     {
+        _count--;
         ref T item = ref _items[id];
         item.Exists = false;
         item.FreeNext = _freeHead;

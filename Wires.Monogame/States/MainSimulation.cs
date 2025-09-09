@@ -8,7 +8,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Wires.Core;
+using Wires.Sim.Saving;
 using Wires.Sim;
+using System.Text.Json;
 
 namespace Wires.States;
 
@@ -61,10 +63,10 @@ public class MainSimulation : IScreen
 
         _components.Add(new(Blueprint.NAND));
         _components.Add(new(Blueprint.Delay));
-        //_components.Add(new(Blueprint.On));
-        //_components.Add(new(Blueprint.Off));
+        _components.Add(new(Blueprint.On));
+        _components.Add(new(Blueprint.Off));
 
-        _components.AddRange(Levels.LoadLevels(_components));
+        //_components.AddRange(Levels.LoadLevels(_components));
 
         _windowSize = new(_graphics.GraphicsDevice.Viewport.Width * 0.1f, _graphics.GraphicsDevice.Viewport.Height - 2 * Padding);
     }
@@ -94,6 +96,19 @@ public class MainSimulation : IScreen
 
     private void UpdateInputs()
     {
+        if (InputHelper.Down(Keys.LeftControl))
+        {
+            if (InputHelper.Down(Keys.L))
+            {
+                LevelModel[] models = JsonSerializer.Deserialize<LevelModel[]>(Levels.LoadLocalData()) ?? [];
+                _components.AddRange(Levels.CreateComponentEntriesFromModels(_components, models));
+            }
+            else if (InputHelper.Down(Keys.S))
+            {
+                Levels.SaveLocalData(Levels.SerializeComponentEntries(_components));
+            }
+        }
+
         if (UiInput())
             return;
 

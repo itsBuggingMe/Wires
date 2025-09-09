@@ -5,6 +5,8 @@ namespace Wires.Sim;
 #nullable enable
 internal class TestCases
 {
+    public IEnumerable<(PowerState[] Input, PowerState[] Output)>? Enumerable => _data;
+
     private (PowerState[] Input, PowerState[] Output)[]? _data;
     public readonly int Length;
 

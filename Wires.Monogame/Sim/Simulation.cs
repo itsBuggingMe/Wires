@@ -43,6 +43,21 @@ public class Simulation
         Height = height;
     }
 
+    public IEnumerable<Component> Components
+    {
+        get
+        {
+            for (int i = 0; i < _components.Max; i++)
+            {
+                var c = _components[i];
+                if (c.Exists)
+                {
+                    yield return c;
+                }
+            }
+        }
+    }
+
     public int InputCount
     {
         get
