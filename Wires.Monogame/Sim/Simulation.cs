@@ -3,8 +3,6 @@ using Microsoft.Xna.Framework;
 using Wires.Core;
 using Apos.Shapes;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using static System.Formats.Asn1.AsnWriter;
 
 namespace Wires.Sim;
 
@@ -162,7 +160,7 @@ public class Simulation
                 _ => throw new Exception("Not a seed component")
             };
 
-            _outputs.TryAdd(firstOutputPos, powerToApply);
+            _outputs[firstOutputPos] = powerToApply;
 
             foreach (var wireNode in WiresAt(firstOutputPos))
             {
@@ -259,7 +257,7 @@ public class Simulation
 
         ShortCircuitDescription? StartVisit(Point point, int componentId, PowerState state)
         {
-            _outputs.TryAdd(point, state);
+            _outputs[point] = state;
 
             foreach (WireNode connection in WiresAt(point))
             {
@@ -273,7 +271,7 @@ public class Simulation
         {
             ref Wire wire = ref _wires[wireNode.Id];
 
-            if (wire.LastVisitComponentId == componentId && wire.PowerState == state)
+            if (wire.PowerState == state)
                 return null;
             
             wire.LastVisitComponentId = componentId;
@@ -291,7 +289,10 @@ public class Simulation
                 if (connectedWire.LastVisitComponentId != -1)
                 {// this wire has been powered already
                     if (connectedWire.LastVisitComponentId == componentId)
-                        continue;
+                    {
+                        if (connectedWire.PowerState == state)
+                            continue;
+                    }
                     else if (connectedWire.PowerState != state)
                         return CurrentShortCircuit = new ShortCircuitDescription(connectedWire.LastVisitComponentId, componentId, connectedWire.PowerState, state, wireNode.Id);
                 }

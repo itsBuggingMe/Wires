@@ -11,6 +11,7 @@ using Wires.Core;
 using Wires.Sim.Saving;
 using Wires.Sim;
 using System.Text.Json;
+using System.Security.AccessControl;
 
 namespace Wires.States;
 
@@ -55,6 +56,8 @@ public class MainSimulation : IScreen
 
     private int _rotation;
 
+    private IEnumerator<ShortCircuitDescription?>? _state;
+
     public MainSimulation(Camera2D camera, Graphics graphics)
     {
         _graphics = graphics;
@@ -68,23 +71,66 @@ public class MainSimulation : IScreen
         _windowSize = new(_graphics.GraphicsDevice.Viewport.Width * 0.1f, _graphics.GraphicsDevice.Viewport.Height - 2 * Padding);
     }
 
+    private int _index;
+    public class Assembler
+    {
+        public static void Main(string[] args)
+        {
+            string asm = Console.ReadLine() ?? "";
+
+            asm
+                .Split(['\n', '\r', '\t', ' '], StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.ToUpper() switch
+                {
+                    "ZERO" => "0001",
+                    "ONE" => "0010",
+                    "ADD" => "0011",
+                    "XOR" => "0100",
+                    "OR" => "0101",
+                    "AND" => "0110",
+                    "NOT" => "0111",
+                    "STR0" => "1000",
+                    "STR1" => "1001",
+                    "STR2" => "1010",
+                    "LDR0" => "1010",
+                    "LDR1" => "1101",
+                    "LDR2" => "1110",
+                    "JMP" => "1111",
+                    _ => throw new Exception($"Unknown token {s}.")
+                })
+                .ToList()
+                .ForEach(Console.WriteLine);
+        }
+    }
+
     public void Update(Time gameTime)
     {
         //_camera.Scale = Vector2.One * 1 / 0.34609375f;
         _testCaseTimer += gameTime.FrameDeltaTime;
 
-        if(_testCaseTimer > 30)
+        if(_testCaseTimer > 10)
         {
-            _testCaseTimer -= 30;
+            _testCaseTimer -= 10;
             if(_playState == PlayButtonState.Pause && CurrentEntry is not null)
             {
-                CurrentTestCaseIndex++;
-                if (CurrentTestCaseIndex >= CurrentEntry.TestCases!.Length)
+                if (CurrentEntry.TestCases is null || CurrentEntry.TestCases.Length == 0)
                 {
-                    _playState = PlayButtonState.Play;
+                    //while (true)
+                    //{
+                    //    CurrentEntry.Blueprint.StepStateful();
+                    //}
+                    CurrentEntry.Blueprint.StepStateful();
                 }
                 else
-                    TestTestCase();
+                {
+                    CurrentTestCaseIndex++;
+                    if (CurrentTestCaseIndex >= CurrentEntry.TestCases.Length)
+                    {
+                        _playState = PlayButtonState.Play;
+                    }
+                    else
+                        TestTestCase();
+                }
             }
         }
 
@@ -93,6 +139,12 @@ public class MainSimulation : IScreen
 
     private void UpdateInputs()
     {
+        //if(InputHelper.RisingEdge(Keys.J))
+        //{
+        //    _index = 0;
+        //    _state = CurrentEntry?.Custom?.StepEnumerator(CurrentEntry.Blueprint).GetEnumerator();
+        //}
+
         if (InputHelper.Down(Keys.LeftAlt))
         {
             if (InputHelper.RisingEdge(Keys.L))
@@ -424,9 +476,6 @@ public class MainSimulation : IScreen
 
         var component = _components[_selectedSim];
 
-        if (component.TestCases is null)
-            return;
-
         Rectangle p = Play;
         float m = p.Contains(InputHelper.MouseLocation) ? MouseButton.Left.Down() ? 1.2f : 1.1f : 1f;
 
@@ -445,7 +494,10 @@ public class MainSimulation : IScreen
                 break;
         }
 
-        _graphics.DrawStringCentered($"{CurrentTestCaseIndex}/{component.TestCases.Length} passed", new Vector2(p.Left - p.Width, p.Center.Y));
+        if (component.TestCases is not null)
+        {
+            _graphics.DrawStringCentered($"{CurrentTestCaseIndex}/{component.TestCases.Length} passed", new Vector2(p.Left - p.Width, p.Center.Y));
+        }
     }
 
     private IEnumerable<(Rectangle Rectangle, ComponentEntry ComponentEntry)> EnumerateEntries()
