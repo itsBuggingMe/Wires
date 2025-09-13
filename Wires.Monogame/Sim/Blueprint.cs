@@ -144,7 +144,8 @@ public class Blueprint
                 return err;
         }
 
-        if(recordDelayValue)
+
+        if (recordDelayValue)
         {
             Custom.RecordDelayValues();
         }

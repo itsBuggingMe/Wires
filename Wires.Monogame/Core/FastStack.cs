@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.ComponentModel;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace Wires.Core;
 
@@ -16,7 +17,7 @@ public struct FastStack<T>(int capacity)
 
     public ref T PushRef() => ref MemoryHelper.GetValueOrResize(ref _buffer, _nextIndex++);
     public T Pop() => _buffer[--_nextIndex];
-    public Span<T> AsSpan() => _buffer.AsSpan(0, _nextIndex);
+    public Span<T> AsSpan() => MemoryMarshal.CreateSpan(ref MemoryMarshal.GetArrayDataReference(_buffer), _nextIndex);
     public bool TryPop(out T value)
     {
         if(_nextIndex == 0)

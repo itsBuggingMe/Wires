@@ -70,56 +70,22 @@ public class MainSimulation : IScreen
 
         _windowSize = new(_graphics.GraphicsDevice.Viewport.Width * 0.1f, _graphics.GraphicsDevice.Viewport.Height - 2 * Padding);
     }
-
-    private int _index;
-    public class Assembler
-    {
-        public static void Main(string[] args)
-        {
-            string asm = Console.ReadLine() ?? "";
-
-            asm
-                .Split(['\n', '\r', '\t', ' '], StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.ToUpper() switch
-                {
-                    "ZERO" => "0001",
-                    "ONE" => "0010",
-                    "ADD" => "0011",
-                    "XOR" => "0100",
-                    "OR" => "0101",
-                    "AND" => "0110",
-                    "NOT" => "0111",
-                    "STR0" => "1000",
-                    "STR1" => "1001",
-                    "STR2" => "1010",
-                    "LDR0" => "1010",
-                    "LDR1" => "1101",
-                    "LDR2" => "1110",
-                    "JMP" => "1111",
-                    _ => throw new Exception($"Unknown token {s}.")
-                })
-                .ToList()
-                .ForEach(Console.WriteLine);
-        }
-    }
-
     public void Update(Time gameTime)
     {
         //_camera.Scale = Vector2.One * 1 / 0.34609375f;
         _testCaseTimer += gameTime.FrameDeltaTime;
 
-        if(_testCaseTimer > 10)
+        if(_testCaseTimer > 2)
         {
-            _testCaseTimer -= 10;
+            _testCaseTimer -= 2;
             if(_playState == PlayButtonState.Pause && CurrentEntry is not null)
             {
                 if (CurrentEntry.TestCases is null || CurrentEntry.TestCases.Length == 0)
                 {
-                    //while (true)
-                    //{
-                    //    CurrentEntry.Blueprint.StepStateful();
-                    //}
-                    CurrentEntry.Blueprint.StepStateful();
+                    while(true)
+                    {
+                       CurrentEntry.Blueprint.StepStateful();
+                    }
                 }
                 else
                 {

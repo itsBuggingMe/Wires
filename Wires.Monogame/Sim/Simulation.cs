@@ -430,9 +430,9 @@ public class Simulation
     public Span<WireNode> WiresAt(Point position)
     {
         ushort index = (ushort)(position.X + position.Y * Width);
-        if(_wireMap.Has(index))
+        if(_wireMap.TryGet(index, out var stack))
         {
-            return _wireMap[index].AsSpan();
+            return stack.AsSpan();
         }
         return Span<WireNode>.Empty;
     }
