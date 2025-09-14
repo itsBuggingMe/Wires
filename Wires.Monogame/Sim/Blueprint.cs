@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using Wires.Core;
 
 namespace Wires.Sim;
@@ -59,7 +61,30 @@ public class Blueprint
     private PowerState[] _inputBuffer;
     public PowerState[] OutputBufferRaw => _outputBuffer;
     private PowerState[] _outputBuffer;
-    public PowerState DelayValue;
+
+    public PowerState DelayValue
+    {
+        get
+        {
+            Debug.Assert(Descriptor == IntrinsicBlueprint.Delay);
+            return _state;
+        }
+        set => _state = value;
+    }
+
+    public PowerState SwitchValue
+    {
+        get
+        {
+            Debug.Assert(Descriptor == IntrinsicBlueprint.Switch);
+            return _state;
+        }
+        set => _state = value;
+    }
+
+    // used for delay and toggle
+    private PowerState _state;
+
     public readonly int Rotation;
     private readonly bool _isSpecialSprite;
 
@@ -153,7 +178,7 @@ public class Blueprint
         return null;
     }
 
-    public void Draw(Graphics g, Simulation? sim, Point pos, float scale, float wireRad, bool isShortCircuit, float opacity = 1f, int? rotationOverride = null)
+    public void Draw(Graphics g, Simulation? sim, Point pos, float scale, float wireRad, bool isShortCircuit, int inputOutputId, float opacity = 1f, int? rotationOverride = null)
     {
         Color? ssColor = isShortCircuit ? Color.DarkGoldenrod : null;
 
@@ -178,6 +203,18 @@ public class Blueprint
                     break;
                 case TileKind.Component when !_isSpecialSprite:
                     g.ShapeBatch.DrawRectangle(mapPos - new Vector2(scale) * 0.5f, new(scale), ssColor ?? new Color(181, 14, 59) * opacity, new(156, 3, 46), 3, 8);
+
+                    if(Descriptor is IntrinsicBlueprint.Switch)
+                    {
+                        const float ScaleFactor = 0.17f;
+                        var grooveColor = Constants.GetWireColor(SwitchValue);
+                        Vector2 center = mapPos;
+                        Vector2 a = center + new Vector2(scale * ScaleFactor, 0);
+                        Vector2 b = center - new Vector2(scale * ScaleFactor, 0);
+                        g.ShapeBatch.DrawLine(a, b, scale * ScaleFactor, grooveColor.Color, grooveColor.Output, 3);
+                        Vector2 switchSize = new Vector2(scale) * ScaleFactor;
+                        g.ShapeBatch.DrawCircle(SwitchValue.On ? a : b, switchSize.X * 0.8f, Color.DarkGray, Color.Gray, 2);
+                    }
                     break;
             }
         }
@@ -201,8 +238,18 @@ public class Blueprint
             });
         }
 
-        Vector2 size = g.Font.MeasureString(Text);
-        g.SpriteBatchText.DrawString(g.Font, Text, pos.ToVector2() * scale
+        if (Descriptor is IntrinsicBlueprint.Switch)
+            return;
+
+        string textToDraw = Descriptor switch
+        {
+            IntrinsicBlueprint.Input => $"IN {inputOutputId}",
+            IntrinsicBlueprint.Output => $"OUT {inputOutputId}",
+            _ => Text,
+        };
+
+        Vector2 size = g.Font.MeasureString(textToDraw);
+        g.SpriteBatchText.DrawString(g.Font, textToDraw, pos.ToVector2() * scale
             , Color.White, rotation * MathHelper.PiOver2, size * 0.5f - textOffset, 1, default, default);
     }
 
@@ -239,6 +286,11 @@ public class Blueprint
         (new Point(-1, 0), TileKind.Input),
     ], "Delay", IntrinsicBlueprint.Delay);
 
+    public static readonly Blueprint Switch = new([
+        (new Point(0, 0), TileKind.Component),
+        (new Point(1, 0), TileKind.Output),
+    ], nameof(Switch), IntrinsicBlueprint.Switch);
+
     public enum IntrinsicBlueprint
     {
         None,
@@ -248,5 +300,6 @@ public class Blueprint
         Output,
         Input,
         Delay,
+        Switch,
     }
 }

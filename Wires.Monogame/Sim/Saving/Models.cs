@@ -86,6 +86,7 @@ internal class ComponentModel
     public int Y { get; init; }
     public bool AllowDelete { get; init; }
     public int? InputOutputId { get; init; }
+    public bool? SwcState { get; init; }
     public int Rotation { get; set; }
 }
 

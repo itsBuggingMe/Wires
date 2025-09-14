@@ -73,12 +73,27 @@
     <script src="_content/nkast.Wasm.XR/js/XR.8.0.5.js"></script>
 
     <script>
-        window.getClipboard = async () => {
-            const text = await navigator.clipboard.readText();
-            DotNet.invokeMethod('Wires', 'ClipboardFound', text);
+        window.openFile = async () => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = ".json";
+
+            input.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = event => {
+                    DotNet.invokeMethod('Wires', 'FileFound', event.target.result);
+                }
+
+                reader.readAsText(file);
+            };
+
+            input.click();
         }
 
-        window.setClipboard = async (textToCopy) => {
+        window.saveFile  = async (textToCopy) => {
             if (navigator?.clipboard?.writeText) {
                 await navigator.clipboard.writeText(textToCopy);
             }

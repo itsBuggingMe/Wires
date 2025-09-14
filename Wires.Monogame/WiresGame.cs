@@ -1,8 +1,10 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Wires.Core;
-using Apos.Shapes;
 using Wires.States;
+using MonoGameGum.Forms;
+using MonoGameGum;
+using Gum.Forms.DefaultVisuals;
 
 namespace Wires;
 
@@ -29,11 +31,21 @@ public class WiresGame : Game
 
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
-
     }
 
     protected override void Initialize()
     {
+        GumService.Default.Initialize(this, DefaultVisualsVersion.V2);
+
+        Color dark = new Color(33, 24, 24);
+        Color light = new Color(92, 62, 62);
+
+        Styling.ActiveStyle.Colors.PrimaryLight = light * 1.2f;
+        Styling.ActiveStyle.Colors.Primary = light;
+        Styling.ActiveStyle.Colors.PrimaryDark = dark;
+        Styling.ActiveStyle.Colors.DarkGray = dark;
+        Styling.ActiveStyle.Colors.LightGray= light;
+
         Graphics graphics = new(_graphics, Content);
 
         ServiceContainer serviceContainer = new();
@@ -45,10 +57,10 @@ public class WiresGame : Game
             .Add(_graphics)
             .Add(_graphics.GraphicsDevice)
 
-            .Add(new Camera2D(_graphics.GraphicsDevice))
             .Add(new Time())
 
             .Add(graphics)
+            .Add(graphics.Camera)
             .Add(graphics.SpriteBatch)
             .Add(graphics.WhitePixel)
 
@@ -56,8 +68,21 @@ public class WiresGame : Game
             ;
 
         ScreenManager manager = ScreenManager.Create<MainSimulation>(serviceContainer, this);
+        serviceContainer.Add(manager);
 
         Components.Add(manager);
         base.Initialize();
+    }
+
+    protected override void Update(GameTime gameTime)
+    {
+        base.Update(gameTime);
+        GumService.Default.Update(gameTime);
+    }
+
+    protected override void Draw(GameTime gameTime)
+    {
+        base.Draw(gameTime);
+        GumService.Default.Draw();
     }
 }

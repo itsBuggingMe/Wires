@@ -11,25 +11,25 @@ using Wires.Core;
 using Wires.Sim.Saving;
 using Wires.Sim;
 using System.Text.Json;
-using System.Security.AccessControl;
+using MonoGameGum;
+using Gum.Forms.Controls;
+using Gum.Forms.DefaultVisuals;
+using Gum.Wireframe;
+using MonoGameGum.Input;
 
 namespace Wires.States;
 
-public class MainSimulation : IScreen
+public partial class MainSimulation : IScreen
 {
-    private Camera2D _camera;
-    private ShapeBatch _sb;
-    private Graphics _graphics;
+    private readonly Camera2D _camera;
+    private readonly ShapeBatch _sb;
+    private readonly Graphics _graphics;
+    private readonly ScreenManager _screenManager;
 
     private Point? _dragStartWorld;
-    private Point? _dragStartUi;
-    private DragReason _dragReason;
-    private int _wireDiagnalValue;
-    private int _selectedComponentToPlace = -1;
 
     private ShortCircuitDescription? _shortCircuitErr;
 
-    private enum DragReason : byte { Right = 1, Bottom = 2, Component = 4, }
     private enum SimDragReason : byte { PlaceWire, MoveComponent }
     private SimDragReason _simDragReason;
     private int _draggedComponentId;
@@ -38,59 +38,54 @@ public class MainSimulation : IScreen
     private PlayButtonState _playState;
     private int CurrentTestCaseIndex
     { 
-        get => CurrentEntry?.TestCaseIndex ?? 0;
+        get => _currentEntry?.TestCaseIndex ?? 0;
         set
         {
-            if(CurrentEntry is { } entry)
+            if(_currentEntry is { } entry)
                 entry.TestCaseIndex = value;
         }
     }
     private float _testCaseTimer;
 
+    internal IReadOnlyList<ComponentEntry> Components => _components;
+
     private readonly List<ComponentEntry> _components = [];
-    private int _selectedSim = -1;
+    private ComponentEntry? _currentEntry;
 
     private PowerState[] _outputTempBuffer = new PowerState[128];
-
-    private ComponentEntry? CurrentEntry => _selectedSim == -1 ? null : _components[_selectedSim];
 
     private int _rotation;
 
     private IEnumerator<ShortCircuitDescription?>? _state;
 
-    public MainSimulation(Camera2D camera, Graphics graphics)
+    public MainSimulation(Camera2D camera, Graphics graphics, ScreenManager screenManager) : this(graphics, camera, screenManager)
     {
-        _graphics = graphics;
-        _camera = camera;
-        _sb = graphics.ShapeBatch;
+        AddComponent(new(Blueprint.NAND));
 
-        _components.Add(new(Blueprint.NAND));
-
-        _components.AddRange(Levels.LoadLevels(_components));
-
-        _windowSize = new(_graphics.GraphicsDevice.Viewport.Width * 0.1f, _graphics.GraphicsDevice.Viewport.Height - 2 * Padding);
+        foreach (var c in Levels.LoadLevels(_components))
+            AddComponent(c);
     }
+
     public void Update(Time gameTime)
     {
         //_camera.Scale = Vector2.One * 1 / 0.34609375f;
         _testCaseTimer += gameTime.FrameDeltaTime;
 
-        if(_testCaseTimer > 2)
+        if(_testCaseTimer > 10 || InputHelper.Down(Keys.LeftShift))
         {
-            _testCaseTimer -= 2;
-            if(_playState == PlayButtonState.Pause && CurrentEntry is not null)
+            _testCaseTimer = 0;
+            if(_playState == PlayButtonState.Pause && _currentEntry is not null)
             {
-                if (CurrentEntry.TestCases is null || CurrentEntry.TestCases.Length == 0)
+                if (_currentEntry.TestCases is null || _currentEntry.TestCases.Length == 0)
                 {
-                    while(true)
-                    {
-                       CurrentEntry.Blueprint.StepStateful();
-                    }
+                    _currentEntry?.Blueprint?.StepStateful();
+                    //if (_state is not null && !_state.MoveNext())
+                    //    CurrentEntry.Custom?.RecordDelayValues();
                 }
                 else
                 {
                     CurrentTestCaseIndex++;
-                    if (CurrentTestCaseIndex >= CurrentEntry.TestCases.Length)
+                    if (CurrentTestCaseIndex >= _currentEntry.TestCases.Length)
                     {
                         _playState = PlayButtonState.Play;
                     }
@@ -107,7 +102,6 @@ public class MainSimulation : IScreen
     {
         //if(InputHelper.RisingEdge(Keys.J))
         //{
-        //    _index = 0;
         //    _state = CurrentEntry?.Custom?.StepEnumerator(CurrentEntry.Blueprint).GetEnumerator();
         //}
 
@@ -115,17 +109,26 @@ public class MainSimulation : IScreen
         {
             if (InputHelper.RisingEdge(Keys.L))
             {
-                Levels.LoadLocalData(s =>
+                Levels.LoadLocalData((Action<string>)(s =>
                 {
                     LevelModel[] models = JsonSerializer.Deserialize<LevelModel[]>(s) ?? [];
-                    _components.Clear();
-                    _components.Add(new(Blueprint.NAND));
-                    _components.Add(new(Blueprint.Delay));
-                    _components.Add(new(Blueprint.On));
-                    _components.Add(new(Blueprint.Off));
-                    _components.AddRange(Levels.CreateComponentEntriesFromModels(_components, models));
+                    this._components.Clear();
+                    for(int i = _componentButtons.Children.Count - 1; i >= 0; i--)
+                    {
+                        _componentButtons.Children[i].RemoveFromRoot();
+                    }
+
+                    AddComponent((ComponentEntry)new(Blueprint.NAND));
+                    AddComponent((ComponentEntry)new(Blueprint.Delay));
+                    AddComponent((ComponentEntry)new(Blueprint.On));
+                    AddComponent((ComponentEntry)new(Blueprint.Off));
+                    AddComponent((ComponentEntry)new(Blueprint.Switch));
+                    foreach(var i in Levels.CreateComponentEntriesFromModels((List<ComponentEntry>)this._components, models))
+                    {
+                        AddComponent(i);
+                    }
                     ResetSimulation();
-                });
+                }));
             }
             else if (InputHelper.RisingEdge(Keys.S))
             {
@@ -133,29 +136,27 @@ public class MainSimulation : IScreen
             }
         }
 
-        if (UiInput())
+        if (UpdateUi() || GumService.Default.Cursor.WindowOver != null)
             return;
 
-        if (CurrentEntry is { Custom: not null } x && SimInteract(x.Blueprint))
+        if (_currentEntry is { Custom: not null } x && SimInteract(x.Blueprint))
             return;
 
         UpdateCamera();
     }
 
-    private Rectangle Sidebar => new Rectangle(new(Padding), _windowSize.ToPoint());
-    private Rectangle Play => new Rectangle(_graphics.GraphicsDevice.Viewport.Width - 64 - Padding, Padding, 64, 64);
 
     private void ResetSimulation()
     {
         CurrentTestCaseIndex = 0;
         _shortCircuitErr = null;
-        CurrentEntry?.Custom?.ClearAllDelayValues();
-        CurrentEntry?.Blueprint.Reset();
+        _currentEntry?.Custom?.ClearAllDelayValues();
+        _currentEntry?.Blueprint.Reset();
     }
 
     private void TestTestCase()
     {
-        if(CurrentEntry is { TestCases: { } cases, Blueprint: { } blueprint })
+        if(_currentEntry is { TestCases: { } cases, Blueprint: { } blueprint })
         {
             cases.Set(CurrentTestCaseIndex, blueprint.InputBufferRaw, _outputTempBuffer);
             blueprint.StepStateful();
@@ -165,133 +166,6 @@ public class MainSimulation : IScreen
                 _playState = PlayButtonState.Play;
             }
         }
-    }
-
-    private bool UiInput()
-    {
-        Rectangle sidebar = Sidebar;
-
-        if (_dragStartUi is not null && !MouseButton.Left.Down())
-        {
-            // implicit falling edge
-            // drag and drop
-            if(_dragReason == DragReason.Component)
-            {
-                if(!sidebar.Contains(InputHelper.MouseLocation))
-                {
-                    ComponentEntry toAdd = _components[_selectedComponentToPlace];
-
-                    if(CurrentEntry is { Custom: Simulation sim } componentEntry)
-                    {
-                        sim.Place(toAdd.Blueprint, GetTileOver(), _rotation & 3);
-                        ResetSimulation();
-                    }
-
-                    _selectedComponentToPlace = -1;
-                }
-                else
-                {
-                    int index = EnumerateEntries().TakeWhile(e => !e.Rectangle.Contains(InputHelper.MouseLocation)).Count();
-                    if(index < _components.Count)
-                    {
-                        _selectedSim = index;
-
-                        if (_components[index].Custom is Simulation simulation)
-                        {
-                            _camera.Position = new Vector2(Step * simulation.Width, Step * simulation.Height) * -0.5f + new Vector2(Step * 0.5f)
-                                + Vector2.UnitX * _windowSize.X * 0.5f;
-                        }
-                    }
-                }
-            }
-
-            _dragStartUi = null;
-            return true;
-        }
-
-        if (_dragStartUi is null)
-        {
-#if !BLAZORGL
-            Mouse.SetCursor(MouseCursor.Arrow);
-#endif
-            Rectangle rightBar = new Rectangle(sidebar.Right, sidebar.Top, 0, sidebar.Height);
-            rightBar.Inflate(6, 6);
-
-            Rectangle bottomBar = new Rectangle(sidebar.Left, sidebar.Bottom, sidebar.Width, 0);
-            bottomBar.Inflate(6, 6);
-
-            MouseCursor? cursor;
-            (_dragReason, cursor) = true switch
-            {
-                _ when rightBar.Contains(InputHelper.MouseLocation) && bottomBar.Contains(InputHelper.MouseLocation) => (DragReason.Right | DragReason.Bottom, MouseCursor.SizeNWSE),
-                _ when rightBar.Contains(InputHelper.MouseLocation) => (DragReason.Right, MouseCursor.SizeWE),
-                _ when bottomBar.Contains(InputHelper.MouseLocation) => (DragReason.Bottom, MouseCursor.SizeNS),
-                _ when EnumerateEntries().Any(e => e.Rectangle.Contains(InputHelper.MouseLocation)) => (DragReason.Component, default),
-                _ => default,
-            };
-#if !BLAZORGL
-
-            if (cursor is not null)
-                Mouse.SetCursor(cursor);
-#endif
-
-            if (_dragReason != default && MouseButton.Left.RisingEdge())
-            {
-                _dragStartUi = InputHelper.MouseLocation;
-                if(_dragReason == DragReason.Component)
-                {
-                    _selectedComponentToPlace = EnumerateEntries().TakeWhile(e => !e.Rectangle.Contains(InputHelper.MouseLocation)).Count();
-
-                    if(_selectedComponentToPlace == _selectedSim)
-                    {
-                        _dragStartUi = null;
-                    }
-                }
-
-                return true;
-            }
-        }
-
-        if(_dragStartUi is not null)
-        {
-            Vector2 target = InputHelper.MouseLocation.ToVector2() - new Vector2(Padding);
-
-            if (_dragReason.HasFlag(DragReason.Right)) _windowSize.X = target.X;
-            if (_dragReason.HasFlag(DragReason.Bottom)) _windowSize.Y = target.Y;
-            _windowSize.X = float.Max(_windowSize.X, 20);
-            _windowSize.Y = float.Max(_windowSize.Y, 20);
-
-            if(_dragReason == DragReason.Component && Keys.Space.RisingEdge())
-            {
-                _rotation++;
-            }
-
-            return true;
-        }
-
-        if(Play.Contains(InputHelper.MouseLocation) && MouseButton.Left.RisingEdge() && CurrentEntry is not null)
-        {
-            switch(_playState)
-            {
-                case PlayButtonState.Play:
-                    _playState = PlayButtonState.Pause;
-                    _testCaseTimer = 0;
-                    CurrentTestCaseIndex = 0;
-                    _components[_selectedSim].Blueprint.Custom?.ClearAllDelayValues();
-                    TestTestCase();
-                    break;
-                case PlayButtonState.Pause:
-                    _playState = PlayButtonState.Play;
-                    break;
-            }
-        }
-        
-        if(sidebar.Contains(InputHelper.MouseLocation))
-        {
-            return true;
-        }
-
-        return false;
     }
 
     private bool SimInteract(Blueprint blueprint)
@@ -327,6 +201,17 @@ public class MainSimulation : IScreen
                 sim.CreateWire(new Wire(dragStart, tileOver));
                 ResetSimulation();
             }
+            else
+            {
+                foreach (var component in sim.Components)
+                {
+                    if(component.Position == tileOver && component is { Blueprint.Descriptor: Blueprint.IntrinsicBlueprint.Switch })
+                    {
+                        component.Blueprint.SwitchValue = component.Blueprint.SwitchValue.On ? PowerState.OffState : PowerState.OnState;
+                    }
+                }
+                ResetSimulation();
+            }
             input = true;
             _dragStartWorld = null;
         }
@@ -334,7 +219,7 @@ public class MainSimulation : IScreen
         if(MouseButton.Left.Down() && _dragStartWorld is Point && _simDragReason == SimDragReason.MoveComponent)
         {
             sim.MoveComponent(_draggedComponentId, tileOver);
-            //ResetSimulation();
+            ResetSimulation();
         }
 
         if (MouseButton.Right.FallingEdge())
@@ -362,17 +247,13 @@ public class MainSimulation : IScreen
         _graphics.SpriteBatch.Begin(transformMatrix: _camera.View);
         _graphics.SpriteBatchText.Begin(samplerState: SamplerState.PointClamp, transformMatrix: _camera.View);
 
-        if (CurrentEntry is { } entry)
+        if (_currentEntry is { } entry)
         {
             entry.Custom?.Draw(_graphics, Step);
 
-            if (_dragReason == DragReason.Component && 
-                (uint)_selectedComponentToPlace < (uint)_components.Count && 
-                _dragStartUi is not null &&
-                !Sidebar.Contains(InputHelper.MouseLocation))
+            if (_componentToPlace is not null && GumService.Default.Cursor.WindowOver is null)
             {
-                var toDraw = _components[_selectedComponentToPlace];
-                toDraw.Blueprint.Draw(_graphics, null, GetTileOver(), Step, Constants.WireRad, false, rotationOverride: _rotation);
+                _componentToPlace.Blueprint.Draw(_graphics, null, GetTileOver(), Step, Constants.WireRad, false, 0, rotationOverride: _rotation);
             }
 
             var over = GetTileOver();
@@ -382,7 +263,7 @@ public class MainSimulation : IScreen
                 && _simDragReason == SimDragReason.PlaceWire)
             {
                 var colors = Constants.GetWireColor(PowerState.OffState);
-                CurrentEntry?.Custom?.DrawWire(_sb, Step, new Wire(dragStart, over), colors.Color * 0.5f, colors.Output * 0.5f);
+                _currentEntry?.Custom?.DrawWire(_sb, Step, new Wire(dragStart, over), colors.Color * 0.5f, colors.Output * 0.5f);
             }
         }
 
@@ -391,92 +272,11 @@ public class MainSimulation : IScreen
         _graphics.SpriteBatchText.End();
 
         // ui
-        _sb.Begin();
-        _graphics.SpriteBatchText.Begin(samplerState: SamplerState.PointClamp);
-
-        var sidebar = Sidebar;
-        if (_selectedSim < 0)
-            _graphics.DrawStringCentered("No Component Selected", _graphics.GraphicsDevice.Viewport.Bounds.Size.ToVector2() * 0.5f);
-        else
-            _graphics.DrawString(_components[_selectedSim].Name, new Vector2(sidebar.Right + Padding, sidebar.Top), default, 2, Color.White);
-
         DrawUi();
-
-        _sb.End();
-        _graphics.SpriteBatchText.End();
     }
-
-    private Vector2 _windowSize;
 
     const int Padding = 10;
     const int Rounding = 10;
-
-    private void DrawUi()
-    {
-        Color dark = new Color(33, 24, 24);
-        Color light = new Color(92, 62, 62);
-
-        _sb.DrawRectangle(new(Padding), _windowSize,
-            dark,
-            light, 4, Rounding);
-
-        int index = 0;
-        foreach(var (bounds, entry) in EnumerateEntries())
-        {
-            _sb.FillRectangle(bounds.Location.ToVector2(), bounds.Size.ToVector2(),
-                light * (bounds.Contains(InputHelper.MouseLocation) || index == _selectedComponentToPlace ? 1.2f : 1f), Rounding);
-
-            _graphics.DrawStringCentered(entry.Name, bounds.Center.ToVector2(), color: _components[index].TestCaseIndex switch
-            {
-                int i when i == _components[index].TestCases?.Length => Color.Green,
-                int i when i > 0 && _components[index].TestCases is not null => Color.Red,
-                _ => Color.White,
-            });
-            index++;
-        }
-
-        if(_selectedSim == -1)
-        {
-            return;
-        }
-
-        var component = _components[_selectedSim];
-
-        Rectangle p = Play;
-        float m = p.Contains(InputHelper.MouseLocation) ? MouseButton.Left.Down() ? 1.2f : 1.1f : 1f;
-
-        _sb.DrawRectangle(p.Location.ToVector2(), p.Size.ToVector2(), dark * m, light * m, 4, Rounding);
-        switch(_playState)
-        {
-            case PlayButtonState.Play:
-                _sb.DrawEquilateralTriangle(p.Center.ToVector2() - Vector2.UnitX * 3, 12, Color.Green * m, Color.DarkGreen * m, 3, 4, -MathHelper.PiOver2);
-                break;
-            case PlayButtonState.Pause:
-                var size = new Vector2(12, 35);
-                _sb.DrawRectangle(p.Center.ToVector2() - size * 0.5f + Vector2.UnitX * -10f, size, Color.Green * m, Color.DarkGreen * m, 2, 4);
-                _sb.DrawRectangle(p.Center.ToVector2() - size * 0.5f + Vector2.UnitX * 10f, size, Color.Green * m, Color.DarkGreen * m, 2, 4);
-                // when the button is the pause button, we are playing, so display additional info
-
-                break;
-        }
-
-        if (component.TestCases is not null)
-        {
-            _graphics.DrawStringCentered($"{CurrentTestCaseIndex}/{component.TestCases.Length} passed", new Vector2(p.Left - p.Width, p.Center.Y));
-        }
-    }
-
-    private IEnumerable<(Rectangle Rectangle, ComponentEntry ComponentEntry)> EnumerateEntries()
-    {
-        int cardWidth = (int)_windowSize.X - 2 * Padding;
-        int cardHeight = (int)(cardWidth * 0.5f);
-        Rectangle template = new Rectangle(new(Padding * 2), new(cardWidth, cardHeight));
-        foreach (var entry in _components)
-        {
-            yield return (template, entry);
-            template.Offset(0, cardHeight + Padding);
-        }
-    }
 
     private Point GetTileOver() => ((_camera.ScreenToWorld(InputHelper.MouseLocation.ToVector2()) - new Vector2(-Step / 2)) / new Vector2(Step)).ToPoint();
 
@@ -497,6 +297,23 @@ public class MainSimulation : IScreen
     const float Step = 50f;
 
 
-    public void OnEnter(IScreen previous, object? args) { }
-    public object? OnExit() => null;
+    public void OnEnter(IScreen previous, object? args)
+    {
+        if(args is LevelModel model)
+        {
+            InitUi(_screenManager, _graphics);
+
+            foreach (var level in Levels.CreateComponentEntriesFromModels(_components, [model]))
+                AddComponent(level);
+
+            foreach (var entry in _components)
+                AddComponent(entry);
+        }
+    }
+
+    public object? OnExit()
+    {
+        GumService.Default.Root.Children.Clear();
+        return null;
+    }
 }

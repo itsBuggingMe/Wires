@@ -14,11 +14,11 @@ using System.Text.Json;
 namespace Wires.Sim.Saving;
 
 #if BLAZORGL
-public static class ClipboardUtils
+public static class FileUtils
 {
     public static Action<string>? OnClipboardLoad;
     [JSInvokable]
-    public static void ClipboardFound(string data)
+    public static void FileFound(string data)
     {
         OnClipboardLoad?.Invoke(data);
         OnClipboardLoad = null;
@@ -32,7 +32,7 @@ internal static class Levels
     public static IJSRuntime JSRuntimeInstance { get; set; } = null!;
 
 #else
-    const string Path = "save.txt";
+    const string Path = "save.json";
 #endif
 
     private static PowerState On => PowerState.OnState;
@@ -43,17 +43,17 @@ internal static class Levels
     public static void LoadLocalData(Action<string> onLoad)
     {
 #if BLAZORGL
-        ClipboardUtils.OnClipboardLoad = onLoad;
-        JSRuntimeInstance.InvokeAsync<string>("getClipboard");
+        FileUtils.OnClipboardLoad = onLoad;
+        JSRuntimeInstance.InvokeAsync<string>("openFile");
 #else
-        onLoad(File.Exists(Path) ? File.ReadAllText("save.txt") : string.Empty);
+        onLoad(File.Exists(Path) ? File.ReadAllText(Path) : string.Empty);
 #endif
     }
 
     public static void SaveLocalData(string s)
     {
 #if BLAZORGL
-        JSRuntimeInstance.InvokeVoidAsync("setClipboard", s);
+        JSRuntimeInstance.InvokeVoidAsync("saveFile", s);
 #else
         File.WriteAllText(Path, s);
 #endif
@@ -76,6 +76,9 @@ internal static class Levels
                         AllowDelete = c.AllowDelete,
                         InputOutputId = c.InputOutputId,
                         Rotation = c.Blueprint.Rotation,
+                        SwcState = c.Blueprint.Descriptor is Blueprint.IntrinsicBlueprint.Switch ?
+                            c.Blueprint.SwitchValue.On : 
+                            null,
                     }).ToArray(),
                 ComponentTiles = c.Blueprint
                     .Display
@@ -134,7 +137,7 @@ internal static class Levels
                     nameof(Blueprint.Output) => Blueprint.Output,
                     _ => existingEntries.FirstOrDefault(m => m.Name == component.BlueprintName)?.Blueprint ??
                         throw new System.Exception($"Could not find blueprint of name: {component.BlueprintName}")
-                }, new(component.X, component.Y), component.Rotation, component.AllowDelete, component.InputOutputId ?? 0);
+                }, new(component.X, component.Y), component.Rotation, component.AllowDelete, component.InputOutputId ?? 0, component.SwcState ?? false);
             }
 
             foreach (var wire in m.Wires ?? [])

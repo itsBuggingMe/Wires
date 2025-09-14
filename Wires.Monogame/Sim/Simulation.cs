@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 using Wires.Core;
 using Apos.Shapes;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace Wires.Sim;
 
@@ -157,6 +158,7 @@ public class Simulation
                 Blueprint.IntrinsicBlueprint.Off => PowerState.OffState,
                 Blueprint.IntrinsicBlueprint.Input => blueprint.InputBuffer(component.InputOutputId),
                 Blueprint.IntrinsicBlueprint.Delay => component.Blueprint.DelayValue,
+                Blueprint.IntrinsicBlueprint.Switch => component.Blueprint.SwitchValue,
                 _ => throw new Exception("Not a seed component")
             };
 
@@ -468,7 +470,7 @@ public class Simulation
         return default;
     }
 
-    public int Place(Blueprint blueprint, Point position, int rotation, bool allowDelete = true, int inputOutputId = 0)
+    public int Place(Blueprint blueprint, Point position, int rotation, bool allowDelete = true, int inputOutputId = 0, bool initalState = false)
     {
         blueprint = blueprint.Clone(rotation);
 
@@ -486,9 +488,15 @@ public class Simulation
         if(blueprint.Descriptor is Blueprint.IntrinsicBlueprint.On or 
             Blueprint.IntrinsicBlueprint.Off or 
             Blueprint.IntrinsicBlueprint.Input or 
-            Blueprint.IntrinsicBlueprint.Delay)
+            Blueprint.IntrinsicBlueprint.Delay or 
+            Blueprint.IntrinsicBlueprint.Switch)
         {
             _seedComponents.Add(id);
+
+            if(blueprint.Descriptor is Blueprint.IntrinsicBlueprint.Switch)
+            {
+                blueprint.SwitchValue = initalState ? PowerState.OnState : PowerState.OffState;
+            }
         }
 
         if(blueprint.Descriptor is Blueprint.IntrinsicBlueprint.Delay)
@@ -599,7 +607,7 @@ public class Simulation
             if (!component.Exists)
                 continue;
 
-            component.Blueprint.Draw(g, this, component.Position, scale, Constants.WireRad, id == shortCircuitComponentId);
+            component.Blueprint.Draw(g, this, component.Position, scale, Constants.WireRad, id == shortCircuitComponentId, component.InputOutputId);
             id++;
         }
 

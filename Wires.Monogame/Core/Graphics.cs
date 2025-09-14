@@ -15,12 +15,14 @@ public class Graphics
     public ContentManager Content { get; private set; }
     public SpriteFont Font { get; private set; }
     public ShapeBatch ShapeBatch { get; private set; }
+    public Camera2D Camera { get; private set; }
 
     public Graphics(GraphicsDeviceManager graphicsDeviceManager, ContentManager content)
     {
         Content = content;
         GraphicsDeviceManager = graphicsDeviceManager;
         GraphicsDevice = graphicsDeviceManager.GraphicsDevice;
+        Camera = new Camera2D(GraphicsDevice);
         SpriteBatch = new SpriteBatch(GraphicsDevice);
         SpriteBatchText = new SpriteBatch(GraphicsDevice);
         ShapeBatch = new ShapeBatch(GraphicsDevice, content);

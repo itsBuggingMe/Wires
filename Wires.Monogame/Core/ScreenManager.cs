@@ -60,20 +60,22 @@ public class ScreenManager : IGameComponent, IUpdateable, IDrawable
 
     public void Update(GameTime gameTime)
     {
+        InputHelper.TickUpdate(_game.IsActive);
+        ThrowIfNotInitalized(out IScreen current);
+
+        if (InputHelper.RisingEdge(Keys.R) && InputHelper.Down(Keys.LeftControl))
+        {
+            var arg = current.OnExit();
+            var next = _current = _firstFactory(_services);
+            next.OnEnter(current, arg);
+        }
+
+        _shared.SetValues(gameTime);
+        current.Update(_shared);
+
         try
         {
-            InputHelper.TickUpdate(_game.IsActive);
-            ThrowIfNotInitalized(out IScreen current);
 
-            if (InputHelper.RisingEdge(Keys.R) && InputHelper.Down(Keys.LeftControl))
-            {
-                var arg = current.OnExit();
-                var next = _current = _firstFactory(_services);
-                next.OnEnter(current, arg);
-            }
-
-            _shared.SetValues(gameTime);
-            current.Update(_shared);
         }
         catch(Exception e)
         {
@@ -83,11 +85,12 @@ public class ScreenManager : IGameComponent, IUpdateable, IDrawable
 
     public void Draw(GameTime gameTime)
     {
+        ThrowIfNotInitalized(out IScreen current);
+        _shared.SetValues(gameTime);
+        current.Draw(_shared);
         try
         {
-            ThrowIfNotInitalized(out IScreen current);
-            _shared.SetValues(gameTime);
-            current.Draw(_shared);
+
         }
         catch (Exception e)
         {
@@ -101,7 +104,16 @@ public class ScreenManager : IGameComponent, IUpdateable, IDrawable
         ThrowIfNotInitalized(out var current);
 
         var next = CreateScreen<T>(_services);
-        object arg = current.OnExit();
+        object? arg = current.OnExit();
+        _current = next;
+        next.OnEnter(current, arg);
+    }
+
+    public void SwitchScreen(IScreen next)
+    {
+        ThrowIfNotInitalized(out var current);
+
+        object? arg = current.OnExit();
         _current = next;
         next.OnEnter(current, arg);
     }

@@ -41,14 +41,6 @@ public static class InputHelper
 #if BLAZORGL
         MouseState = new MouseState(MouseState.X, MouseState.Y, _scrollValue, MouseState.LeftButton, MouseState.MiddleButton, MouseState.RightButton, MouseState.XButton1, MouseState.XButton2);
 #endif
-
-        if (!isActive)
-        {
-            PrevKeyboardState = default;
-            PrevMouseState = default;
-            KeyboardState = default;
-            MouseState = default;
-        }
     }
 
     /// <summary>
