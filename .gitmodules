@@ -1,3 +1,9 @@
 [submodule "Apos.Shapes"]
 	path = Apos.Shapes
 	url = https://github.com/itsBuggingMe/Apos.Shapes
+[submodule "kni"]
+	path = kni
+	url = https://github.com/kniEngine/kni
+[submodule "Gum"]
+	path = Gum
+	url = https://github.com/vchelaru/Gum
