@@ -72,15 +72,6 @@ public class ScreenManager : IGameComponent, IUpdateable, IDrawable
 
         _shared.SetValues(gameTime);
         current.Update(_shared);
-
-        try
-        {
-
-        }
-        catch(Exception e)
-        {
-            Debugger.Break();
-        }
     }
 
     public void Draw(GameTime gameTime)
@@ -88,14 +79,6 @@ public class ScreenManager : IGameComponent, IUpdateable, IDrawable
         ThrowIfNotInitalized(out IScreen current);
         _shared.SetValues(gameTime);
         current.Draw(_shared);
-        try
-        {
-
-        }
-        catch (Exception e)
-        {
-            Debugger.Break();
-        }
     }
 
     public void SwitchScreen<T>()

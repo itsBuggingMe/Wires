@@ -272,14 +272,19 @@ internal class ComponentEditor : IScreen
         AddTileKindButton("Input Tile", TileKind.Input);
         AddTileKindButton("Output Tile", TileKind.Output);
 
-        var button = new Button
+        var doubleButton = new StackPanel
         {
-            Width = 100,
+            Orientation = Orientation.Horizontal
+        };
+
+        var saveButton = new Button
+        {
+            Width = 95,
             Height = 20,
             Text = "Save",
         };
 
-        button.Click += (o, e) =>
+        saveButton.Click += (o, e) =>
         {
             SetErrorText(string.Empty);
             if (_width < 4)
@@ -306,7 +311,23 @@ internal class ComponentEditor : IScreen
             _screenManager.SwitchScreen(_return);
         };
 
-        panel.AddChild(button);
+        var cancelButton = new Button
+        {
+            X = 10,
+            Width = 95,
+            Height = 20,
+            Text = "Cancel",
+        };
+
+        cancelButton.Click += (o, e) =>
+        {
+            _isCancel = true;
+            _screenManager.SwitchScreen(_return);
+        };
+
+        doubleButton.AddChild(saveButton);
+        doubleButton.AddChild(cancelButton);
+        panel.AddChild(doubleButton);
 
         _errorLabel = new Label
         {
@@ -334,38 +355,46 @@ internal class ComponentEditor : IScreen
         }
     }
 
+    private bool _isCancel;
+
     public object? OnExit()
     {
         GumService.Default.Root.Children.Clear();
-        return new LevelModel
-        {
-            Name = _name,
-            ComponentTiles = _placedTiles.OrderBy(i => _inputs.IndexOf(i.Key) is int x && x != -1 ? x : _outputs.IndexOf(i.Key)).Select(kvp => new ComponentTileModel
+
+        if (_isCancel)
+            return new ComponentEditorResult(null);
+
+        return new ComponentEditorResult(new LevelModel
             {
-                X = kvp.Key.X,
-                Y = kvp.Key.Y,
-                TileKind = kvp.Value.ToString(),
-            }).ToArray(),
-            GridHeight = _height,
-            GridWidth = _width,
-            TestCases = [],
-            Components = Enumerable.Concat(_inputs.Select((p, i) => new ComponentModel
-            {
-                BlueprintName = nameof(Blueprint.Input),
-                AllowDelete = false,
-                InputOutputId = i,
-                Rotation = 0,
-                X = 0,
-                Y = i,
-            }), _outputs.Select((p, i) => new ComponentModel
-            {
-                BlueprintName = nameof(Blueprint.Output),
-                AllowDelete = false,
-                InputOutputId = i,
-                Rotation = 0,
-                X = 3,
-                Y = i,
-            })).ToArray(),
-        };
+                Name = _name,
+                ComponentTiles = _placedTiles.OrderBy(i => _inputs.IndexOf(i.Key) is int x && x != -1 ? x : _outputs.IndexOf(i.Key)).Select(kvp => new ComponentTileModel
+                {
+                    X = kvp.Key.X,
+                    Y = kvp.Key.Y,
+                    TileKind = kvp.Value.ToString(),
+                }).ToArray(),
+                GridHeight = _height,
+                GridWidth = _width,
+                TestCases = [],
+                Components = Enumerable.Concat(_inputs.Select((p, i) => new ComponentModel
+                {
+                    BlueprintName = nameof(Blueprint.Input),
+                    AllowDelete = false,
+                    InputOutputId = i,
+                    Rotation = 0,
+                    X = 0,
+                    Y = i,
+                }), _outputs.Select((p, i) => new ComponentModel
+                {
+                    BlueprintName = nameof(Blueprint.Output),
+                    AllowDelete = false,
+                    InputOutputId = i,
+                    Rotation = 0,
+                    X = 3,
+                    Y = i,
+                })).ToArray(),
+            });
     }
 }
+
+record class ComponentEditorResult(LevelModel? ResultModel);

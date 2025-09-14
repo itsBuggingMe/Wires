@@ -24,9 +24,16 @@ public partial class Index
         // init game
         if (_game == null)
         {
-            Levels.JSRuntimeInstance = JsRuntime;
-            _game = new WiresGame();
-            _game.Run();
+            try
+            {
+                Levels.JSRuntimeInstance = JsRuntime;
+                _game = new WiresGame();
+                _game.Run();
+            }
+            catch(Exception e)
+            {
+
+            }
         }
 
         // run gameloop

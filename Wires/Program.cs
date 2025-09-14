@@ -5,6 +5,7 @@ using Microsoft.Xna.Platform;
 using Microsoft.Xna.Platform.Graphics;
 using Microsoft.Xna.Platform.Input;
 using System;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Threading.Tasks;
 

@@ -20,12 +20,14 @@ using RenderingLibrary;
 using System.IO;
 using Gum.DataTypes.Variables;
 using System.Threading;
+using Gum.Forms;
 
 namespace Wires.States;
 
 partial class MainSimulation
 {
     private Rectangle Play => new Rectangle(_graphics.GraphicsDevice.Viewport.Width - 64 - Padding, Padding, 64, 64);
+    private StackPanel? _rlickMenu;
 
     // we call InitUi
 #pragma warning disable CS8618
@@ -51,15 +53,39 @@ partial class MainSimulation
         menu.AddToRoot();
         menu.Dock(Dock.Bottom);
 
-        var createNew = new MenuItem
+        MenuItem("New Component", () => screenManager.SwitchScreen(new ComponentEditor(this, graphics, screenManager)));
+        MenuItem("Load", () => Levels.LoadLocalData((Action<string>)(s =>
         {
-            Header = "New Component"
-        };
-        menu.Items.Add(createNew);
-        createNew.Clicked += (o, e) =>
+            LevelModel[] models = JsonSerializer.Deserialize<LevelModel[]>(s) ?? [];
+            this._components.Clear();
+            for (int i = _componentButtons.Children.Count - 1; i >= 0; i--)
+            {
+                _componentButtons.Children[i].RemoveFromRoot();
+            }
+
+            AddComponent((ComponentEntry)new(Blueprint.NAND));
+            AddComponent((ComponentEntry)new(Blueprint.Delay));
+            AddComponent((ComponentEntry)new(Blueprint.On));
+            AddComponent((ComponentEntry)new(Blueprint.Off));
+            AddComponent((ComponentEntry)new(Blueprint.Switch));
+
+            foreach (var i in Levels.CreateComponentEntriesFromModels((List<ComponentEntry>)this._components, models))
+            {
+                AddComponent(i);
+            }
+            ResetSimulation();
+        })));
+        MenuItem("Save", () => Levels.SaveLocalData(Levels.SerializeComponentEntries(_components)));
+
+        void MenuItem(string header, Action onClicked)
         {
-            screenManager.SwitchScreen(new ComponentEditor(this, graphics, screenManager));
-        };
+            var item = new MenuItem
+            {
+                Header = header
+            };
+            menu.Items.Add(item);
+            item.Clicked += (o, e) => onClicked();
+        }
 
         var mainPanel = new StackPanel()
         {
@@ -94,7 +120,7 @@ partial class MainSimulation
         Button b = new Button()
         {
             Text = componentEntry.Name,
-            Width = -Padding
+            Width = -Padding,
         };
 
         b.Click += (o, e) =>
@@ -105,6 +131,47 @@ partial class MainSimulation
                 _camera.Position = new Vector2(Step * simulation.Width, Step * simulation.Height) * -0.5f + new Vector2(Step * 0.5f)
                     + Vector2.UnitX * (_componentScroller.AbsoluteLeft + _componentScroller.ActualWidth * 0.5f);
             }
+        };
+
+        b.Visual.RightClick += (o, e) =>
+        {
+            var rclickMenu = new StackPanel
+            {
+                Width = 100,
+                X = InputHelper.MouseLocation.X,
+                Y = InputHelper.MouseLocation.Y
+            };
+
+            var deleteButton = new Button
+            {
+                Text = "Delete",
+            };
+            deleteButton.Click += (o, e) =>
+            {
+                _components.Remove(componentEntry);
+                if(_currentEntry == componentEntry)
+                {
+                    _currentEntry = null;
+                }
+
+                for (int i = _componentButtons.Children.Count - 1; i >= 0; i--)
+                {
+                    _componentButtons.Children[i].RemoveFromRoot();
+                }
+
+                foreach (var entry in _components)
+                    AddComponent(entry);
+
+                rclickMenu.RemoveFromRoot();
+
+                _rlickMenu = null;
+            };
+            rclickMenu.AddChild(deleteButton);
+            deleteButton.Dock(Dock.FillHorizontally);
+
+            rclickMenu.AddToRoot();
+
+            _rlickMenu = rclickMenu;
         };
 
         b.Visual.Dragging += (o, e) =>
@@ -118,11 +185,21 @@ partial class MainSimulation
 
     private bool UpdateUi()
     {
-        if(!MouseButton.Left.Down())
+        if ((MouseButton.Left.FallingEdge() || MouseButton.Right.FallingEdge()) && _rlickMenu is not null)
+        {
+            Rectangle bounds = new Rectangle((int)_rlickMenu.AbsoluteLeft, (int)_rlickMenu.AbsoluteTop, (int)_rlickMenu.ActualWidth, (int)_rlickMenu.ActualHeight);
+            if(!bounds.Contains(InputHelper.MouseLocation))
+            {
+                _rlickMenu.RemoveFromRoot();
+            }
+        }
+
+        if (!MouseButton.Left.Down())
         {
             if(_componentToPlace is not null)
             {
                 _currentEntry?.Custom?.Place(_componentToPlace.Blueprint, GetTileOver(), _rotation);
+                ResetSimulation();
                 if(!InputHelper.Down(Keys.LeftShift))
                 {
                     _componentToPlace = null;

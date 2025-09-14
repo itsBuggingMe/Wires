@@ -105,37 +105,6 @@ public partial class MainSimulation : IScreen
         //    _state = CurrentEntry?.Custom?.StepEnumerator(CurrentEntry.Blueprint).GetEnumerator();
         //}
 
-        if (InputHelper.Down(Keys.LeftAlt))
-        {
-            if (InputHelper.RisingEdge(Keys.L))
-            {
-                Levels.LoadLocalData((Action<string>)(s =>
-                {
-                    LevelModel[] models = JsonSerializer.Deserialize<LevelModel[]>(s) ?? [];
-                    this._components.Clear();
-                    for(int i = _componentButtons.Children.Count - 1; i >= 0; i--)
-                    {
-                        _componentButtons.Children[i].RemoveFromRoot();
-                    }
-
-                    AddComponent((ComponentEntry)new(Blueprint.NAND));
-                    AddComponent((ComponentEntry)new(Blueprint.Delay));
-                    AddComponent((ComponentEntry)new(Blueprint.On));
-                    AddComponent((ComponentEntry)new(Blueprint.Off));
-                    AddComponent((ComponentEntry)new(Blueprint.Switch));
-                    foreach(var i in Levels.CreateComponentEntriesFromModels((List<ComponentEntry>)this._components, models))
-                    {
-                        AddComponent(i);
-                    }
-                    ResetSimulation();
-                }));
-            }
-            else if (InputHelper.RisingEdge(Keys.S))
-            {
-                Levels.SaveLocalData(Levels.SerializeComponentEntries(_components));
-            }
-        }
-
         if (UpdateUi() || GumService.Default.Cursor.WindowOver != null)
             return;
 
@@ -299,12 +268,15 @@ public partial class MainSimulation : IScreen
 
     public void OnEnter(IScreen previous, object? args)
     {
-        if(args is LevelModel model)
+        if(args is ComponentEditorResult model)
         {
             InitUi(_screenManager, _graphics);
 
-            foreach (var level in Levels.CreateComponentEntriesFromModels(_components, [model]))
-                AddComponent(level);
+            if(model.ResultModel is not null)
+            {
+                foreach (var level in Levels.CreateComponentEntriesFromModels(_components, [model.ResultModel]))
+                    _components.Add(level);
+            }
 
             foreach (var entry in _components)
                 AddComponent(entry);

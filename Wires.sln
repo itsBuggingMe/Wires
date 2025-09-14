@@ -9,6 +9,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wires", "Wires\Wires.csproj
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wires.Monogame", "Wires.Monogame\Wires.Monogame.csproj", "{212B71FA-68CE-4257-9D0F-978BDBE91A4F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kni.Platform.Blazor.GL", "kni\Platforms\Kni.Platform.Blazor.GL.csproj", "{AB65BFCB-FB1D-0064-62C1-A7C9B32CB47E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KniGum", "Gum\MonoGameGum\KniGum\KniGum.csproj", "{F70D6AE0-783B-E25F-26A6-F3093A5AE06F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +31,14 @@ Global
 		{212B71FA-68CE-4257-9D0F-978BDBE91A4F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{212B71FA-68CE-4257-9D0F-978BDBE91A4F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{212B71FA-68CE-4257-9D0F-978BDBE91A4F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AB65BFCB-FB1D-0064-62C1-A7C9B32CB47E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AB65BFCB-FB1D-0064-62C1-A7C9B32CB47E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AB65BFCB-FB1D-0064-62C1-A7C9B32CB47E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AB65BFCB-FB1D-0064-62C1-A7C9B32CB47E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F70D6AE0-783B-E25F-26A6-F3093A5AE06F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F70D6AE0-783B-E25F-26A6-F3093A5AE06F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F70D6AE0-783B-E25F-26A6-F3093A5AE06F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F70D6AE0-783B-E25F-26A6-F3093A5AE06F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
