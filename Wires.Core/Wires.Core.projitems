@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>232cea0a-3250-4480-a114-292c0e25a2c4</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Wires.Core</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Constants.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Graphics.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sim\Blueprint.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sim\ComponenEntry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sim\Saving\Levels.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sim\Saving\Models.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sim\ShortCircuitDescription.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sim\Simulation.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sim\Structs.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sim\TestCase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)States\ComponentEditor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)States\MainSimulation.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)States\MainSimulation.UI.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)WiresGame.cs" />
+  </ItemGroup>
+</Project>

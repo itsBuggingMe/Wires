@@ -1,2 +1,2 @@
-﻿using var game = new Wires.WiresGame();
+﻿using var game = new Wires.Core.WiresGame();
 game.Run();
