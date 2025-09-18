@@ -1,12 +1,6 @@
-﻿using Gum.Forms.Controls;
-using Gum.Forms.DefaultVisuals;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using MonoGameGum;
-using MonoGameGum.ExtensionMethods;
-using MonoGameGum.GueDeriving;
-using RenderingLibrary;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -31,7 +25,6 @@ internal class ComponentEditor : IScreen
     private readonly Graphics _graphics;
     private readonly Camera2D _camera;
     private readonly ScreenManager _screenManager;
-    private Label? _errorLabel;
 
     private int _width = 9;
     private int _height = 9;
@@ -73,9 +66,6 @@ internal class ComponentEditor : IScreen
     {
         if (InputHelper.RisingEdge(MouseButton.Left) || InputHelper.RisingEdge(MouseButton.Right))
             SetErrorText();
-
-        if (GumService.Default.Cursor.WindowOver != null)
-            return;
 
         var p = GetTileOver() - new Point(SimSize / 2);
         if(_placedTileKind is { } tile)
@@ -180,10 +170,7 @@ internal class ComponentEditor : IScreen
 
     private void SetErrorText(string str = "")
     {
-        if(_errorLabel is not null)
-        {
-            _errorLabel.Text = str;
-        }
+
     }
 
     public void Draw(Time gameTime)
@@ -226,142 +213,13 @@ internal class ComponentEditor : IScreen
 
     public void OnEnter(IScreen previous, object? args)
     {
-        var panel = new StackPanel();
-        panel.Spacing = 5;
-        panel.X = 20;
-        panel.Y = 20;
-        panel.AddToRoot();
 
-        var nameTextBox = new TextBox
-        {
-            Text = _name,
-            Placeholder = "Component Name",
-            Width = 200,
-        };
-        nameTextBox.TextChanged += (o, e) =>
-        {
-            _name = nameTextBox.Text;
-            UpdateDummyComponent();
-        };
-        panel.AddChild(nameTextBox);
-
-        AddHeightWidthBox("Width", i => _width = i);
-        AddHeightWidthBox("Height", i => _height = i);
-
-        TextBox AddHeightWidthBox(string placeholder, Action<int> set)
-        {
-            panel.AddChild(new Label
-            {
-                Text = placeholder
-            });
-
-            var box = new TextBox
-            {
-                Text = "9",
-                Placeholder = placeholder,
-                Width = 200,
-            };
-            box.PreviewTextInput += 
-                (s, e) => e.Handled =  e.Text.Any(t => !char.IsDigit(t));
-            box.TextChanged += (o, e) => set(box.Text.Length == 0 ? 0 : int.Parse(box.Text));
-            panel.AddChild(box);
-
-            return box;
-        }
-
-        AddTileKindButton("Component Tile", TileKind.Component);
-        AddTileKindButton("Input Tile", TileKind.Input);
-        AddTileKindButton("Output Tile", TileKind.Output);
-
-        var doubleButton = new StackPanel
-        {
-            Orientation = Orientation.Horizontal
-        };
-
-        var saveButton = new Button
-        {
-            Width = 95,
-            Height = 20,
-            Text = "Save",
-        };
-
-        saveButton.Click += (o, e) =>
-        {
-            SetErrorText(string.Empty);
-            if (_width < 4)
-            {
-                SetErrorText("Invalid Width Value (Must be >= 4)");
-                return;
-            }
-            if (_height < Math.Max(_inputs.Count, _outputs.Count))
-            {
-                SetErrorText("Invalid Height Value (Not enough space for inputs/outputs)");
-                return;
-            }
-            if (string.IsNullOrWhiteSpace(_name))
-            {
-                SetErrorText("Invalid Name Value");
-                return;
-            }
-            if (_return.Components.Any(c => c.Name == _name))
-            {
-                SetErrorText($"Component with name {_name} already exists.");
-                return;
-            }
-
-            _screenManager.SwitchScreen(_return);
-        };
-
-        var cancelButton = new Button
-        {
-            X = 10,
-            Width = 95,
-            Height = 20,
-            Text = "Cancel",
-        };
-
-        cancelButton.Click += (o, e) =>
-        {
-            _isCancel = true;
-            _screenManager.SwitchScreen(_return);
-        };
-
-        doubleButton.AddChild(saveButton);
-        doubleButton.AddChild(cancelButton);
-        panel.AddChild(doubleButton);
-
-        _errorLabel = new Label
-        {
-            Text = "",
-        };
-        ((LabelVisual)_errorLabel.Visual).Color = Color.Red;
-
-        panel.AddChild(_errorLabel);
-
-        void AddTileKindButton(string buttonText, TileKind tileKind)
-        {
-            var button = new Button
-            {
-                Width = 200,
-                Height = 50,
-                Text = buttonText,
-            };
-
-            button.Visual.Dragging += (s, e) =>
-            {
-                _placedTileKind = tileKind;
-            };
-
-            panel.AddChild(button);
-        }
     }
 
     private bool _isCancel;
 
     public object? OnExit()
     {
-        GumService.Default.Root.Children.Clear();
-
         if (_isCancel)
             return new ComponentEditorResult(null);
 

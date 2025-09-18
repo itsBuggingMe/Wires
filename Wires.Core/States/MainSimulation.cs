@@ -11,11 +11,6 @@ using Wires.Core;
 using Wires.Core.Sim.Saving;
 using Wires.Core.Sim;
 using System.Text.Json;
-using MonoGameGum;
-using Gum.Forms.Controls;
-using Gum.Forms.DefaultVisuals;
-using Gum.Wireframe;
-using MonoGameGum.Input;
 using Paper.Core;
 
 namespace Wires.States;
@@ -58,13 +53,22 @@ public partial class MainSimulation : IScreen
     private int _rotation;
 
     private IEnumerator<ShortCircuitDescription?>? _state;
+    private ComponentEntry? _componentToPlace;
 
-    public MainSimulation(Camera2D camera, Graphics graphics, ScreenManager screenManager) : this(graphics, camera, screenManager)
+    public MainSimulation(Camera2D camera, Graphics graphics, ScreenManager screenManager)
     {
+        _graphics = graphics;
+        _screenManager = screenManager;
+        _camera = camera;
         AddComponent(new(Blueprint.NAND));
 
         foreach (var c in Levels.LoadLevels(_components))
             AddComponent(c);
+    }
+
+    private void AddComponent(ComponentEntry entry)
+    {
+        _components.Add(entry);
     }
 
     public void Update(Time gameTime)
@@ -106,8 +110,8 @@ public partial class MainSimulation : IScreen
         //    _state = CurrentEntry?.Custom?.StepEnumerator(CurrentEntry.Blueprint).GetEnumerator();
         //}
 
-        if (UpdateUi() || GumService.Default.Cursor.WindowOver != null)
-            return;
+        //if (UpdateUi() || GumService.Default.Cursor.WindowOver != null)
+        //    return;
 
         if (_currentEntry is { Custom: not null } x && SimInteract(x.Blueprint))
             return;
@@ -221,7 +225,7 @@ public partial class MainSimulation : IScreen
         {
             entry.Custom?.Draw(_graphics, Step);
 
-            if (_componentToPlace is not null && GumService.Default.Cursor.WindowOver is null)
+            if (_componentToPlace is not null)
             {
                 _componentToPlace.Blueprint.Draw(_graphics, null, GetTileOver(), Step, Constants.WireRad, false, 0, rotationOverride: _rotation);
             }
@@ -242,7 +246,6 @@ public partial class MainSimulation : IScreen
         _graphics.SpriteBatchText.End();
 
         // ui
-        DrawUi();
     }
 
     const int Padding = 10;
@@ -271,7 +274,7 @@ public partial class MainSimulation : IScreen
     {
         if(args is ComponentEditorResult model)
         {
-            InitUi(_screenManager, _graphics);
+            //InitUi(_screenManager, _graphics);
 
             if(model.ResultModel is not null)
             {
@@ -286,7 +289,6 @@ public partial class MainSimulation : IScreen
 
     public object? OnExit()
     {
-        GumService.Default.Root.Children.Clear();
         return null;
     }
 }

@@ -22,7 +22,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)States\Campaign1.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)States\ComponentEditor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)States\MainSimulation.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)States\MainSimulation.UI.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\BorderedElement.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)WiresGame.cs" />
   </ItemGroup>
