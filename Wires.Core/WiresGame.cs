@@ -6,6 +6,7 @@ using Wires.States;
 using MonoGameGum.Forms;
 using MonoGameGum;
 using Gum.Forms.DefaultVisuals;
+using Wires.Core.States;
 
 namespace Wires.Core;
 
@@ -24,12 +25,10 @@ public class WiresGame : Game
         }
 #endif
         ;
-        _graphics.PreparingDeviceSettings += (o, e) =>
-        {
-            _graphics.PreferMultiSampling = true;
-            e.GraphicsDeviceInformation.PresentationParameters.MultiSampleCount = 8;
-        };
 
+#if !BLAZORGL
+        Window.AllowUserResizing = true;
+#endif
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
     }
@@ -68,7 +67,7 @@ public class WiresGame : Game
             .Add(this)
             ;
 
-        ScreenManager manager = ScreenManager.Create<MainSimulation>(serviceContainer, this);
+        ScreenManager manager = ScreenManager.Create<Campaign1>(serviceContainer, this);
         serviceContainer.Add(manager);
 
         Components.Add(manager);
