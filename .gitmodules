@@ -7,3 +7,6 @@
 [submodule "Gum"]
 	path = Gum
 	url = https://github.com/vchelaru/Gum
+[submodule "Paper.Core"]
+	path = Paper.Core
+	url = https://github.com/itsBuggingMe/Paper.Core
