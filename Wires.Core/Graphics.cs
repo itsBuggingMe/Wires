@@ -34,4 +34,18 @@ public class Graphics : GraphicsBase
         Vector2 size = Font.MeasureString(text) * scale;
         SpriteBatchText.DrawString(Font, text, position, color ?? Color.White, rotation, size * alignment, scale, default, default);
     }
+
+    public void StartBatches()
+    {
+        ShapeBatch.Begin();
+        SpriteBatch.Begin();
+        SpriteBatchText.Begin();
+    }
+
+    public void EndBatches()
+    {
+        ShapeBatch.End();
+        SpriteBatch.End();
+        SpriteBatchText.End();
+    }
 }

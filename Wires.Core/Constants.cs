@@ -12,6 +12,8 @@ public static class Constants
     public static readonly Color UILight = new Color(92, 62, 62);
     public const int WireRad = 10;
 
+    public const int Padding = 16;
+
     public static (Color Color, Color Output) GetWireColor(PowerState powerState) => powerState switch
     {
         { On: true } => (Color.Green, Color.DarkGreen),

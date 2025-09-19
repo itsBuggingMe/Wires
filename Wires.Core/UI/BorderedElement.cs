@@ -5,14 +5,17 @@ namespace Wires.Core.UI;
 
 internal class BorderedElement : UIBase<Graphics>
 {
-    public BorderedElement(Vector2 pos, Vector2 size) : base(new(pos), new(size))
+    public BorderedElement(UIVector2 pos, UIVector2 size) : base(pos, size)
     {
 
     }
 
+    protected float ColorMultipler = 1;
+
     public override void Draw()
     {
-        Graphics.ShapeBatch.DrawRectangle(Position, Size, Constants.UILight, Constants.UIDark, 4, 4);
+        Rectangle bounds = Bounds;
+        Graphics.ShapeBatch.DrawRectangle(bounds.Location.ToVector2(), bounds.Size.ToVector2(), Constants.UIDark * ColorMultipler, Constants.UILight * ColorMultipler, 4, 4);
         base.Draw();
     }
 }

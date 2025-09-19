@@ -14,13 +14,13 @@ public class WiresGame : Game
     public WiresGame()
     {
         _graphics = new GraphicsDeviceManager(this)
-#if !BLAZORGL
         {
             GraphicsProfile = GraphicsProfile.HiDef,
+#if !BLAZORGL
             PreferredBackBufferHeight = 720,
             PreferredBackBufferWidth = 1280,
-        }
 #endif
+        }
         ;
 
 #if !BLAZORGL
