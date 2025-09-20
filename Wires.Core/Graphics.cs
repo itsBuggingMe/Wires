@@ -35,11 +35,21 @@ public class Graphics : GraphicsBase
         SpriteBatchText.DrawString(Font, text, position, color ?? Color.White, rotation, size * alignment, scale, default, default);
     }
 
-    public void StartBatches()
+    public void StartBatches(bool useCamera = false)
     {
-        ShapeBatch.Begin();
-        SpriteBatch.Begin();
-        SpriteBatchText.Begin();
+        if(useCamera)
+        {
+            Matrix transform = useCamera ? Camera.View : Matrix.Identity;
+            ShapeBatch.Begin(Camera.View, Camera.Projection);
+            SpriteBatch.Begin(transformMatrix: transform);
+            SpriteBatchText.Begin(samplerState: SamplerState.PointClamp, transformMatrix: transform);
+        }
+        else
+        {
+            ShapeBatch.Begin();
+            SpriteBatch.Begin();
+            SpriteBatchText.Begin(samplerState: SamplerState.PointClamp);
+        }
     }
 
     public void EndBatches()

@@ -9,7 +9,7 @@
     <AssemblyName>Wires.Kni</AssemblyName>
     <DefineConstants>$(DefineConstants);BLAZORGL</DefineConstants>
 	  <KniPlatform>BlazorGL</KniPlatform>
-    <LangVersion>Latest</LangVersion>
+    <LangVersion>Preview</LangVersion>
   </PropertyGroup>
   
   <PropertyGroup>
@@ -26,6 +26,7 @@
   <ItemGroup>
     <Compile Include="Pages\Index.razor.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="ScrollWheelFill.cs" />
   </ItemGroup>
 
   <ItemGroup>    

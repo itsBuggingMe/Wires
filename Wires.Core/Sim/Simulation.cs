@@ -43,6 +43,8 @@ public class Simulation
         Height = height;
     }
 
+    public ref Component GetComponent(int id) => ref _components[id];
+
     public IEnumerable<Component> Components
     {
         get
@@ -188,14 +190,6 @@ public class Simulation
                     // we dont always read outputs
                     blueprint.OutputBuffer(component.InputOutputId) = w.State;
                     break;
-                case Blueprint.IntrinsicBlueprint.NAND:
-                    PowerState a = PowerStateAt(component.GetInputPosition(0));
-                    PowerState b = PowerStateAt(component.GetInputPosition(1));
-
-                    PowerState outputPowerState = !(a.On && b.On) ? PowerState.OnState : PowerState.OffState; // nand!
-
-                    shortCircuit = StartVisit(component.GetOutputPosition(0), tile.ComponentId, outputPowerState);
-                    break;
                 //case Blueprint.IntrinsicBlueprint.Not:
                 //    PowerState inputState = PowerStateAt(component.GetInputPosition(0));
                 //    // we got power - mark as visited
@@ -239,6 +233,28 @@ public class Simulation
                     }
 
                     StartVisit(component.GetOutputPosition(0), tile.ComponentId, outputState);
+                    break;
+                case Blueprint.IntrinsicBlueprint.AND:
+                case Blueprint.IntrinsicBlueprint.OR:
+                case Blueprint.IntrinsicBlueprint.NAND:
+                case Blueprint.IntrinsicBlueprint.NOR:
+                    PowerState a = PowerStateAt(component.GetInputPosition(0));
+                    PowerState b = PowerStateAt(component.GetInputPosition(1));
+
+                    PowerState outputPowerState = component.Blueprint.Descriptor switch
+                    {
+                        Blueprint.IntrinsicBlueprint.AND => (a.On && b.On),
+                        Blueprint.IntrinsicBlueprint.OR => (a.On || b.On),
+                        Blueprint.IntrinsicBlueprint.NAND => !(a.On && b.On),
+                        Blueprint.IntrinsicBlueprint.NOR => !(a.On || b.On),
+                        _ => throw new UnreachableException()
+                    } ? PowerState.OnState : PowerState.OffState;
+
+                    shortCircuit = StartVisit(component.GetOutputPosition(0), tile.ComponentId, outputPowerState);
+                    break;
+                case Blueprint.IntrinsicBlueprint.NOT:
+                    PowerState a1 = PowerStateAt(component.GetInputPosition(0));
+                    shortCircuit = StartVisit(component.GetOutputPosition(0), tile.ComponentId, a1.On ? PowerState.OffState : PowerState.OnState);
                     break;
                 case Blueprint.IntrinsicBlueprint.Disp:
                     // nothing
@@ -592,7 +608,9 @@ public class Simulation
         if (w.A == w.B)
             return default;
 
-        _wires.Create(out int id) = w;
+        ref var wire = ref _wires.Create(out int id);
+        wire.A = w.A;
+        wire.B = w.B;
 
         ushort aIndex = checked((ushort)(w.A.X + w.A.Y * Width));
         _wireMap[aIndex].LazyInit().PushRef() = new WireNode() { Id = id, To = w.B };
@@ -603,9 +621,11 @@ public class Simulation
         return id;
     }
 
-    public void Draw(Graphics g, float scale)
+    public void Draw(Graphics g)
     {
         ShapeBatch sb = g.ShapeBatch;
+
+        const float Scale = Constants.Scale;
 
         if(InputHelper.Down(Microsoft.Xna.Framework.Input.Keys.P))
         {
@@ -615,14 +635,14 @@ public class Simulation
                 {
                     if (this[i, j].Kind == TileKind.Nothing)
                         continue;
-                    g.DrawStringCentered(this[i, j].Kind.ToString(), new Vector2(i, j) * scale, 0.7f);
+                    g.DrawStringCentered(this[i, j].Kind.ToString(), new Vector2(i, j) * Scale, 0.7f);
                 }
             }
         }
 
-        DrawGrid(sb, new Vector2(scale) * -0.5f, scale);
+        DrawGrid(sb, new Vector2(Scale) * -0.5f, Scale);
 
-        Vector2 halfTileOffset = new Vector2(scale) * 0.5f;
+        Vector2 halfTileOffset = new Vector2(Scale) * 0.5f;
 
         int shortCircuitComponentId = CurrentShortCircuit is { Next: not null } ? CurrentShortCircuit.ComponentIdA : -1;
 
@@ -632,7 +652,7 @@ public class Simulation
             if (!component.Exists)
                 continue;
 
-            component.Blueprint.Draw(g, this, component.Position, scale, Constants.WireRad, id == shortCircuitComponentId, component.InputOutputId);
+            component.Blueprint.Draw(g, this, component.Position, Scale, Constants.WireRad, id == shortCircuitComponentId, component.InputOutputId);
             id++;
         }
 
@@ -642,14 +662,14 @@ public class Simulation
                 continue;
             var (color, outline) = Constants.GetWireColor(wire.PowerState);
 
-            DrawWire(sb, scale, wire, color, outline);
+            DrawWire(sb, Scale, wire, color, outline);
         }
 
         if(CurrentShortCircuit is { WireId: > 0 })
         {
             Wire w = _wires[CurrentShortCircuit.WireId];
 
-            DrawWire(sb, scale, w, Color.Yellow, Color.DarkGoldenrod);
+            DrawWire(sb, Scale, w, Color.Yellow, Color.DarkGoldenrod);
         }
     }
 
@@ -688,7 +708,6 @@ public class Simulation
             sb.DrawCircle(a, Constants.WireRad * 0.5f, thatGrayColor, outline, 0);
         }
     }
-
     private void DrawGrid(ShapeBatch sb, Vector2 origin, float step)
     {
         const float LineWidth = 1f;

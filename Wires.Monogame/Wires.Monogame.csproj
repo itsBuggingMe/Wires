@@ -8,6 +8,7 @@
     <TieredCompilation>false</TieredCompilation>
     <RootNamespace>Wires</RootNamespace>
     <Nullable>enable</Nullable>
+    <LangVersion>Preview</LangVersion>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationManifest>app.manifest</ApplicationManifest>

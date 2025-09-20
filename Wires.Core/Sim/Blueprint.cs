@@ -352,6 +352,33 @@ public class Blueprint
         (new Point(-1, 0), TileKind.Input),
     ], nameof(Disp), IntrinsicBlueprint.Disp);
 
+    public static readonly Blueprint NOT = new([
+            (new Point(0, 0), TileKind.Component),
+            (new Point(-1, 0), TileKind.Input),
+            (new Point(1, 0), TileKind.Output),
+        ], nameof(NOT), IntrinsicBlueprint.NOT);
+
+    public static readonly Blueprint AND = new([
+        (new Point(0, 0), TileKind.Component),
+            (new Point(-1, -1), TileKind.Input),
+            (new Point(-1, 1), TileKind.Input),
+            (new Point(1, 0), TileKind.Output),
+        ], "AND", IntrinsicBlueprint.AND);
+
+    public static readonly Blueprint OR = new([
+    (new Point(0, 0), TileKind.Component),
+            (new Point(-1, -1), TileKind.Input),
+            (new Point(-1, 1), TileKind.Input),
+            (new Point(1, 0), TileKind.Output),
+        ], nameof(OR), IntrinsicBlueprint.OR);
+
+    public static readonly Blueprint NOR = new([
+    (new Point(0, 0), TileKind.Component),
+            (new Point(-1, -1), TileKind.Input),
+            (new Point(-1, 1), TileKind.Input),
+            (new Point(1, 0), TileKind.Output),
+        ], nameof(NOR), IntrinsicBlueprint.NOR);
+
     public enum IntrinsicBlueprint
     {
         None,
@@ -365,5 +392,12 @@ public class Blueprint
         Splitter,
         Joiner,
         Disp,
+
+        // not strictly needed, but good for perf
+
+        NOT,
+        AND,
+        OR,
+        NOR,
     }
 }

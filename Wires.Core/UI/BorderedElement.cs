@@ -10,7 +10,7 @@ internal class BorderedElement : UIBase<Graphics>
 
     }
 
-    protected float ColorMultipler = 1;
+    public float ColorMultipler { get; set; } = 1;
 
     public override void Draw()
     {

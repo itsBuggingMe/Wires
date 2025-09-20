@@ -13,6 +13,7 @@ public static class Constants
     public const int WireRad = 10;
 
     public const int Padding = 16;
+    public const int Scale = 50;
 
     public static (Color Color, Color Output) GetWireColor(PowerState powerState) => powerState switch
     {

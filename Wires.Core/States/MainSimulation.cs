@@ -223,7 +223,7 @@ public partial class MainSimulation : IScreen
 
         if (_currentEntry is { } entry)
         {
-            entry.Custom?.Draw(_graphics, Step);
+            entry.Custom?.Draw(_graphics);
 
             if (_componentToPlace is not null)
             {

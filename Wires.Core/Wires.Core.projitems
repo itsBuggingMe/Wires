@@ -13,19 +13,24 @@
     <Compile Include="$(MSBuildThisFileDirectory)Graphics.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Blueprint.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\ComponenEntry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sim\TruthTableData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Saving\Levels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Saving\Models.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\ShortCircuitDescription.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sim\SimInteraction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Simulation.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Structs.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\TestCase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)States\Campaign1.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)States\ComponentEditor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)States\MainSimulation.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Frame.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\StackPanel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\BorderedElement.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\Button.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\ScrollViewer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\Text.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\TruthTable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)WiresGame.cs" />
   </ItemGroup>
 </Project>

@@ -104,6 +104,8 @@
         });
         window.addEventListener("wheel", function(event)
         {
+            DotNet.invokeMethod('Wires.Kni', 'ScrollUpdate', event.wheelDelta);
+            
             // Prevent Mousewheel scrolling the outer page
             // when running inside an iframe. e.g: itch.io embedding.
             event.preventDefault();
