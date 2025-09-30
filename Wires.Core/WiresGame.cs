@@ -53,7 +53,7 @@ public class WiresGame : Game
             .Add(this)
             ;
 
-        ScreenManager manager = ScreenManager.Create<Campaign1>(serviceContainer, this);
+        ScreenManager manager = ScreenManager.Create<CampaignState>(serviceContainer, this);
         serviceContainer.Add(manager);
 
         Components.Add(manager);

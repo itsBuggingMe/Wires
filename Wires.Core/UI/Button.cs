@@ -2,6 +2,7 @@
 using Paper.Core;
 using Paper.Core.UI;
 using System;
+using System.Diagnostics;
 using System.Linq;
 
 namespace Wires.Core.UI;
@@ -43,6 +44,7 @@ internal class Button : BorderedElement
     public Action<Point>? RisingEdge { get; set; }
     public Action<Point>? Drag { get; set; }
     public Action<Point>? DragRelease { get; set; }
+    public Action<Point>? Hover { get; set; }
 
     public Text? Text 
     {
@@ -84,6 +86,11 @@ internal class Button : BorderedElement
         {
             _isDragged = true;
             RisingEdge?.Invoke(InputHelper.MouseLocation);
+        }
+
+        if(Bounds.Contains(InputHelper.MouseLocation))
+        {
+            Hover?.Invoke(InputHelper.MouseLocation);
         }
 
         if (!MouseButton.Left.Down() && _isDragged)

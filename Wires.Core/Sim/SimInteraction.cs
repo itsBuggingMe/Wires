@@ -20,11 +20,10 @@ internal class SimInteraction
 
     public ComponentEntry? ActiveEntry
     { 
-        get => field; 
+        get;
         set
         {
-            _activeDragDrop = null;
-            _rotation = default;
+            Reset();
             field = value;
             if(value is { Custom: { } sim })
                 _camera.Position = new Vector2(Constants.Scale * sim.Width - Constants.Scale, Constants.Scale * sim.Height - Constants.Scale) * -0.5f;
@@ -164,6 +163,14 @@ internal class SimInteraction
 
         if (MouseButton.Left.Down() && _draggedComponentId is null && _wireDragStart is null && _activeDragDrop is null)
             _camera.Position -= (InputHelper.PrevMouseState.Position.ToVector2() - InputHelper.MouseLocation.ToVector2()) / _camera.Scale;
+    }
+
+    public void Reset()
+    {
+        _wireDragStart = default;
+        _draggedComponentId = default;
+        _activeDragDrop = default;
+        _rotation = default;
     }
 
     public void BeginPlaceComponent(ComponentEntry componentEntry)

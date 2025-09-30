@@ -9,6 +9,9 @@
     <Import_RootNamespace>Wires.Core</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Campaign.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day2.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day1.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Constants.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Graphics.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Blueprint.cs" />
@@ -21,9 +24,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Simulation.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Structs.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\TestCase.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)States\Campaign1.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)States\CampaignState.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)States\ComponentEditor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)States\MainSimulation.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\EditorUI.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\Frame.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\StackPanel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\BorderedElement.cs" />

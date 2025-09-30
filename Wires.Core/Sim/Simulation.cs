@@ -235,18 +235,22 @@ public class Simulation
                     StartVisit(component.GetOutputPosition(0), tile.ComponentId, outputState);
                     break;
                 case Blueprint.IntrinsicBlueprint.AND:
-                case Blueprint.IntrinsicBlueprint.OR:
                 case Blueprint.IntrinsicBlueprint.NAND:
+                case Blueprint.IntrinsicBlueprint.OR:
                 case Blueprint.IntrinsicBlueprint.NOR:
+                case Blueprint.IntrinsicBlueprint.XOR:
+                case Blueprint.IntrinsicBlueprint.XNOR:
                     PowerState a = PowerStateAt(component.GetInputPosition(0));
                     PowerState b = PowerStateAt(component.GetInputPosition(1));
 
                     PowerState outputPowerState = component.Blueprint.Descriptor switch
                     {
-                        Blueprint.IntrinsicBlueprint.AND => (a.On && b.On),
-                        Blueprint.IntrinsicBlueprint.OR => (a.On || b.On),
-                        Blueprint.IntrinsicBlueprint.NAND => !(a.On && b.On),
-                        Blueprint.IntrinsicBlueprint.NOR => !(a.On || b.On),
+                        Blueprint.IntrinsicBlueprint.AND =>     (a.On & b.On),
+                        Blueprint.IntrinsicBlueprint.NAND =>   !(a.On & b.On),
+                        Blueprint.IntrinsicBlueprint.OR =>      (a.On | b.On),
+                        Blueprint.IntrinsicBlueprint.NOR =>    !(a.On | b.On),
+                        Blueprint.IntrinsicBlueprint.XOR =>     (a.On ^ b.On),
+                        Blueprint.IntrinsicBlueprint.XNOR =>   !(a.On ^ b.On),
                         _ => throw new UnreachableException()
                     } ? PowerState.OnState : PowerState.OffState;
 

@@ -379,6 +379,20 @@ public class Blueprint
             (new Point(1, 0), TileKind.Output),
         ], nameof(NOR), IntrinsicBlueprint.NOR);
 
+    public static readonly Blueprint XOR = new([
+            (new Point(0, 0), TileKind.Component),
+            (new Point(-1, -1), TileKind.Input),
+            (new Point(-1, 1), TileKind.Input),
+            (new Point(1, 0), TileKind.Output),
+        ], nameof(XOR), IntrinsicBlueprint.XOR);
+
+    public static readonly Blueprint XNOR = new([
+            (new Point(0, 0), TileKind.Component),
+            (new Point(-1, -1), TileKind.Input),
+            (new Point(-1, 1), TileKind.Input),
+            (new Point(1, 0), TileKind.Output),
+        ], nameof(XNOR), IntrinsicBlueprint.XNOR);
+
     public enum IntrinsicBlueprint
     {
         None,
@@ -399,5 +413,7 @@ public class Blueprint
         AND,
         OR,
         NOR,
+        XOR,
+        XNOR,
     }
 }
