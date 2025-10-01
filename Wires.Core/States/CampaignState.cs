@@ -19,8 +19,8 @@ internal class CampaignState : IScreen
 
 
         Campaign[] campaigns = [
-            new Day1(serviceContainer, graphics, _editorUI, _interaction),
             new Day2(serviceContainer, graphics, _editorUI, _interaction),
+            new Day1(serviceContainer, graphics, _editorUI, _interaction),
         ];
 
         foreach (var campaign in campaigns)

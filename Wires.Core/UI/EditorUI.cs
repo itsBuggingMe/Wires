@@ -1,12 +1,12 @@
 ﻿using Microsoft.VisualBasic;
 using Microsoft.Xna.Framework;
+using Paper.Core;
 using Paper.Core.UI;
 using System;
 using System.Collections.ObjectModel;
 using Wires.Core.Sim;
 using Align = Paper.Core.UI.ElementAlign;
 
-[assembly: System.Reflection.Metadata.MetadataUpdateHandler(typeof(Wires.Core.UI.EditorUI.HotReloadManager))]
 namespace Wires.Core.UI;
 
 internal class EditorUI : RootUI<Graphics>
@@ -28,6 +28,8 @@ internal class EditorUI : RootUI<Graphics>
     private StackPanel _campaignsMenu;
     private StackPanel _levelsMenu;
 
+    private ShortCircuitTooltip? _ssTooltip;
+
     private TruthTable? _currentDisplayTable;
 
     public SimInteraction Interaction { get; private set; }
@@ -45,6 +47,8 @@ internal class EditorUI : RootUI<Graphics>
 
     public ComponentEntry? CurrentEntry => _currentCampaign?.Interaction.ActiveEntry;
     private Campaign? _currentCampaign;
+
+    private PowerState[] _tempPowerStateBuffer = new PowerState[128];
 
     public Action<Campaign>? CampaignSelected { get; set; }
 
@@ -65,8 +69,6 @@ internal class EditorUI : RootUI<Graphics>
     {
         Interaction = interaction;
         Init();
-
-        HotReloadManager.HotReloadOccured += (_) => Init();
 
         void Init()
         {
@@ -143,7 +145,16 @@ internal class EditorUI : RootUI<Graphics>
             })
             {
                 ElementAlign = Align.TopRight,
-                Clicked = p => { _isPlaying = !_isPlaying; _testCaseIndex = 0; },
+                Clicked = p =>
+                {
+                    _isPlaying = !_isPlaying;
+                    if(_isPlaying)
+                    {
+                        _testCaseIndex = 0;
+                        CurrentEntry?.TestCases?.Set(TestCaseIndex, CurrentEntry.Blueprint.InputBufferRaw, _tempPowerStateBuffer);
+                        Interaction.Step();
+                    }
+                },
                 Children = [
                     new Text(new(-64 - Padding, Padding, false, false), contentSource: () => CurrentEntry?.TestCases is null ? string.Empty : $"Test {_testCaseIndex + 1}/{CurrentEntry?.TestCases.Length}")
                     {
@@ -156,6 +167,7 @@ internal class EditorUI : RootUI<Graphics>
                 ElementAlign = Align.BottomRight,
                 Text = new Text(new(-140, -30), "Next Level") { ElementAlign = Align.Center },
                 Visible = false,
+                Clicked = p => CurrentCampaign?.NextButtonAction?.Invoke(),
             },
             new Text(new(1920 / 2, Padding), contentSource: () => CurrentEntry?.Name)
             {
@@ -201,6 +213,8 @@ internal class EditorUI : RootUI<Graphics>
                             Levels.Clear();
                             foreach (var item in campaign.LevelItems)
                                 Levels.Add(item);
+                            
+                            _nextButton.Visible = CurrentCampaign?.NextButtonAction is not null;
 
                             if(campaign.LevelItems.Count > 0)
                                 SwitchLevel(campaign.LevelItems[0]);
@@ -235,6 +249,23 @@ internal class EditorUI : RootUI<Graphics>
         }
     }
 
+    public override bool Update()
+    {
+        if(_ssTooltip is null && Interaction.ActiveSim is { CurrentShortCircuit: { } ss })
+        {
+            _ssTooltip = new ShortCircuitTooltip(default, Interaction.ActiveSim, ss);
+            AddChild(_ssTooltip);
+        }
+
+        if(_ssTooltip is not null && Interaction.ActiveSim is { CurrentShortCircuit: null })
+        {
+            RemoveChild(_ssTooltip);
+            _ssTooltip = null;
+        }
+
+        return base.Update();
+    }
+
     public void SwitchLevel(ComponentEntry entry)
     {
         if (!Levels.Contains(entry))
@@ -256,21 +287,6 @@ internal class EditorUI : RootUI<Graphics>
                 ElementAlign = Align.TopRight
             };
             AddChild(_currentDisplayTable);
-        }
-    }
-
-    public static class HotReloadManager
-    {
-        public static Action<Type[]?>? HotReloadOccured;
-
-        public static void ClearCache(Type[]? updatedTypes)
-        {
-
-        }
-
-        public static void UpdateApplication(Type[]? updatedTypes)
-        {
-            HotReloadOccured?.Invoke(updatedTypes);
         }
     }
 }

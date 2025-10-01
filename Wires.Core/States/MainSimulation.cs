@@ -123,9 +123,8 @@ public partial class MainSimulation : IScreen
     private void ResetSimulation()
     {
         CurrentTestCaseIndex = 0;
-        _shortCircuitErr = null;
         _currentEntry?.Custom?.ClearAllDelayValues();
-        _currentEntry?.Blueprint.Reset();
+        _shortCircuitErr = _currentEntry?.Blueprint.Reset();
     }
 
     private void TestTestCase()

@@ -1,6 +1,7 @@
 ﻿using Microsoft.Xna.Framework;
 using System;
 using Paper.Core;
+using System.Diagnostics;
 
 namespace Wires.Core.Sim;
 
@@ -26,6 +27,7 @@ public struct WireNode
     public int Id;
 }
 
+[DebuggerDisplay("{On ? \"On\" : \"Off\",nq}")]
 public record struct PowerState(byte Values)
 {
     public readonly bool On => Values != 0;

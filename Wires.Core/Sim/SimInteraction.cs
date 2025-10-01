@@ -18,6 +18,8 @@ internal class SimInteraction
     private readonly Camera2D _camera;
     private readonly Graphics _graphics;
 
+    public ShortCircuitDescription? ShortCircuitDescription { get; private set; }
+
     public ComponentEntry? ActiveEntry
     { 
         get;
@@ -145,10 +147,10 @@ internal class SimInteraction
         }
     }
 
-    private void Step()
+    public void Step()
     {
         ActiveEntry?.Custom?.ClearAllDelayValues();
-        ActiveEntry?.Blueprint.Reset();
+        ShortCircuitDescription = ActiveEntry?.Blueprint.Reset();
     }
 
     public void UpdateCamera()

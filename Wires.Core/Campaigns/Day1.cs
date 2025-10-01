@@ -22,8 +22,8 @@ internal class Day1 : Campaign
 
     protected override IEnumerable LevelLogic()
     {
-        bool nextButtonClicked = false;
-        UI.NextButton.Clicked = _ => nextButtonClicked = true;
+        // this sucks
+        Action nextLevel = () => NextButtonAction = null;
 
         var level1 = new Simulation(9, 9);
         level1.Place(Blueprint.Output, new(8, 4), 0, false);
@@ -34,10 +34,9 @@ internal class Day1 : Campaign
         while (LevelItems[0].Blueprint.OutputBuffer(0).Off)
             yield return null;
 
-        UI.NextButton.Visible = true;
-        while (!nextButtonClicked)
+        NextButtonAction = nextLevel;
+        while (!NextButtonClicked)
             yield return null;
-                UI.NextButton.Visible = nextButtonClicked = _passAllCases = false;
 
         var level2 = new Simulation(9, 9);
 
@@ -73,10 +72,9 @@ internal class Day1 : Campaign
             yield return null;
         }
 
-        UI.NextButton.Visible = true;
-        while (!nextButtonClicked)
+        NextButtonAction = nextLevel;
+        while (!NextButtonClicked)
             yield return null;
-                UI.NextButton.Visible = nextButtonClicked = _passAllCases = false;
 
         var level3 = new Simulation(9, 9);
 
@@ -144,10 +142,9 @@ internal class Day1 : Campaign
             return result;
         }
 
-        UI.NextButton.Visible = true;
-        while (!nextButtonClicked)
+        NextButtonAction = nextLevel;
+        while (!NextButtonClicked)
             yield return null;
-                UI.NextButton.Visible = nextButtonClicked = _passAllCases = false;
 
         UI.AddButton.Visible = true;
 
@@ -163,10 +160,9 @@ internal class Day1 : Campaign
 
         while (!_passAllCases)
             yield return null;
-        UI.NextButton.Visible = true;
-        while (!nextButtonClicked)
+        NextButtonAction = nextLevel;
+        while (!NextButtonClicked)
             yield return null;
-        UI.NextButton.Visible = nextButtonClicked = _passAllCases = false;
 
         CreateNewLogicLevel(4, "OR", new TestCases([
             ([PowerState.OffState, PowerState.OffState], [PowerState.OffState]),
@@ -177,10 +173,9 @@ internal class Day1 : Campaign
 
         while (!_passAllCases)
             yield return null;
-        UI.NextButton.Visible = true;
-        while (!nextButtonClicked)
+        NextButtonAction = nextLevel;
+        while (!NextButtonClicked)
             yield return null;
-                UI.NextButton.Visible = nextButtonClicked = _passAllCases = false;
 
         CreateNewLogicLevel(5, "NOR", new TestCases([
             ([PowerState.OffState, PowerState.OffState], [PowerState.OnState]),
@@ -191,11 +186,10 @@ internal class Day1 : Campaign
 
         while (!_passAllCases)
             yield return null;
-        UI.NextButton.Visible = true;
+        NextButtonAction = nextLevel;
         UI.NextButton.Text!.Content = "Sandbox";
-        while (!nextButtonClicked)
+        while (!NextButtonClicked)
             yield return null;
-                UI.NextButton.Visible = nextButtonClicked = _passAllCases = false;
 
         var sandbox = new Simulation(9, 9);
 

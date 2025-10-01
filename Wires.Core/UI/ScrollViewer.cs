@@ -20,7 +20,6 @@ internal class ScrollViewer : BorderedElement
             start += child.Size * (_isHorizontal ? Vector2.UnitY : Vector2.UnitX);
         }
 
-
         Graphics.EndBatches();
 
         Graphics.GraphicsDevice.ScissorRectangle = Bounds;

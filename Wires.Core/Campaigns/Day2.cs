@@ -30,6 +30,7 @@ internal class Day2 : Campaign
         AddMenu(new ComponentEntry(Blueprint.NAND));
         AddMenu(new ComponentEntry(Blueprint.OR));
         AddMenu(new ComponentEntry(Blueprint.NOR));
+        AddMenu(new ComponentEntry(Blueprint.Switch));
 
         CreateNewLogicLevel(1, "XOR", new TestCases([
             ([PowerState.OffState, PowerState.OffState], [PowerState.OffState]),
@@ -123,11 +124,11 @@ internal class Day2 : Campaign
 
         void CreateNewLogicLevel(int levelIndex, string name, TestCases? tests, TruthTableData? truthTable)
         {
-            var leveln = new Simulation(9, 9);
+            var leveln = new Simulation(12, 12);
 
-            leveln.Place(Blueprint.Output, new(8, 4), 0, false);
-            leveln.Place(Blueprint.Input, new(0, 2), 0, false);
-            leveln.Place(Blueprint.Input, new(0, 6), 0, false, inputOutputId: 1);
+            leveln.Place(Blueprint.Output, new(11, 6), 0, false);
+            leveln.Place(Blueprint.Input, new(0, 3), 0, false);
+            leveln.Place(Blueprint.Input, new(0, 8), 0, false, inputOutputId: 1);
             _timeSinceLastTestCase = 0;
 
             SetLevel(new ComponentEntry(new Blueprint(leveln, name, [(default, TileKind.Component)]), tests, truthTable));

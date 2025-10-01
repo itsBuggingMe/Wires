@@ -155,6 +155,7 @@ public class Simulation
         {
             Component component = _components[seedComponentId];
             Point firstOutputPos = component.GetOutputPosition(0);
+            // all seed comps only have 1 output
             PowerState powerToApply = component.Blueprint.Descriptor switch
             {
                 Blueprint.IntrinsicBlueprint.On => PowerState.OnState,
@@ -167,12 +168,7 @@ public class Simulation
 
             _outputs[firstOutputPos] = powerToApply;
 
-            foreach (var wireNode in WiresAt(firstOutputPos))
-            {
-                VisitWire(wireNode, seedComponentId, powerToApply);
-            }
-
-            yield return null;
+            yield return CurrentShortCircuit = StartVisit(firstOutputPos, seedComponentId, powerToApply);
         }
 
         // do work
@@ -218,7 +214,11 @@ public class Simulation
 
                     for (int i = 0; i < 8; i++)
                     {
-                        StartVisit(component.GetOutputPosition(i), tile.ComponentId, ((1 << i) & powerState.Values) != 0 ? PowerState.OnState : PowerState.OffState);
+                        if (StartVisit(component.GetOutputPosition(i), tile.ComponentId, ((1 << i) & powerState.Values) != 0 ? PowerState.OnState : PowerState.OffState) is { } d)
+                        {
+                            CurrentShortCircuit = shortCircuit = d;
+                            break; 
+                        }
                     }
                     break;
                 case Blueprint.IntrinsicBlueprint.Joiner:
@@ -232,7 +232,7 @@ public class Simulation
                         }
                     }
 
-                    StartVisit(component.GetOutputPosition(0), tile.ComponentId, outputState);
+                    shortCircuit = StartVisit(component.GetOutputPosition(0), tile.ComponentId, outputState);
                     break;
                 case Blueprint.IntrinsicBlueprint.AND:
                 case Blueprint.IntrinsicBlueprint.NAND:
@@ -291,7 +291,7 @@ public class Simulation
 
             if(shortCircuit is ShortCircuitDescription err)
             {
-                yield return err;
+                yield return CurrentShortCircuit = err;
                 yield break;
             }
             else
@@ -311,16 +311,20 @@ public class Simulation
                 if (VisitWire(connection, componentId, state) is ShortCircuitDescription shortCircuitDescription)
                     return shortCircuitDescription;
             }
-            return null;
+
+            return null;    
         }
 
         ShortCircuitDescription? VisitWire(WireNode wireNode, int componentId, PowerState state)
         {
             ref Wire wire = ref _wires[wireNode.Id];
 
-            if (wire.PowerState == state)
+            if (wire.PowerState == state && wire.LastVisitComponentId == componentId)
                 return null;
-            
+
+            if (wire.PowerState != state && wire.LastVisitComponentId != -1 && wire.LastVisitComponentId != componentId)
+                return new ShortCircuitDescription(componentId, wire.LastVisitComponentId, state, wire.PowerState, wireNode.Id);
+
             wire.LastVisitComponentId = componentId;
             wire.PowerState = state;
 
@@ -471,6 +475,8 @@ public class Simulation
 
         return true;
     }
+
+    public ref Wire Wire(int id) => ref _wires[id];
 
     readonly record struct WorkItem(Point Position, PowerState State, int ComponentId);
 
@@ -669,7 +675,7 @@ public class Simulation
             DrawWire(sb, Scale, wire, color, outline);
         }
 
-        if(CurrentShortCircuit is { WireId: > 0 })
+        if(CurrentShortCircuit is { WireId: >= 0 })
         {
             Wire w = _wires[CurrentShortCircuit.WireId];
 

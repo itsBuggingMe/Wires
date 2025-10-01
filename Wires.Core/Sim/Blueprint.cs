@@ -150,12 +150,12 @@ public class Blueprint
 
     public Blueprint Clone(int rotation) => new Blueprint(_data, rotation);
 
-    public void Reset()
+    public ShortCircuitDescription? Reset()
     {
         if (Custom is null)
-            return;
+            return null;
         Custom.ClearAllDelayValues();
-        StepStateful();
+        return StepStateful();
     }
 
     public ShortCircuitDescription? StepStateful(bool recordDelayValue = true)

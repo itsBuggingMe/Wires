@@ -29,6 +29,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)States\MainSimulation.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\EditorUI.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\Frame.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\ShortCircuitTooltip.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\StackPanel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\BorderedElement.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\Button.cs" />
