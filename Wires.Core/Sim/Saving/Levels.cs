@@ -123,6 +123,58 @@ internal static class Levels
         return CreateComponentEntriesFromModels(existingEntries, levels);
     }
 
+    public static void BinaryFormatModels(Stream outputStream, LevelModel[] models)
+    {
+        BinaryWriter br = new BinaryWriter(outputStream);
+        br.Write(entries.Length);
+        foreach(var model in models)
+        {
+            br.Write(model.GridWidth);
+            br.Write(model.GridHeight);
+            br.Write(model.Name);
+            
+            br.Write(model.Components.Length);
+            foreach(var component in model.Components)
+            {
+                br.Write(component.BlueprintName);
+                br.Write(component.X);
+                br.Write(component.Y);
+                br.Write(component.AllowDelete);
+                br.Write(component.InputOutputId ?? -1);
+                br.Write(component.SwcState ?? false);
+                br.Write(component.Rotation);
+            }
+            
+            br.Write(model.ComponentTiles.Length);
+            foreach(var tile in model.ComponentTiles.Length)
+            {
+                br.Write(tile.X);
+                br.Write(tile.Y);
+                br.Write(tile.TileKind);
+            }
+            
+            br.Write(model.TestCases.Length);
+            foreach(var testCase in model.TestCases)
+            {
+                br.Write(testCase.Inputs.Length);
+                foreach(var i in testCase.Inputs)
+                    br.Write(i);
+                br.Write(testCase.Outputs.Length);
+                foreach(var i in testCase.Outputs)
+                    br.Write(i);
+            }
+            
+            br.Write(model.Wires?.Length ?? 0);
+            foreach(var wireModel in (model.Wires ?? []))
+            {
+                br.Write(wireModel.AX);
+                br.Write(wireModel.AY);
+                br.Write(wireModel.BX);
+                br.Write(wireModel.BY);
+            }
+        }
+    }
+    
     public static IEnumerable<ComponentEntry> CreateComponentEntriesFromModels(List<ComponentEntry> existingEntries, LevelModel[] levels)
     {
         return levels.Select(m =>
