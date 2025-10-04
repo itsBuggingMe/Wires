@@ -290,7 +290,7 @@ internal static class Levels
                 simulation.CreateWire(new Wire(new(wire.AX, wire.AY), new(wire.BX, wire.BY)));
             }
 
-            TestCases? testCases = m.TestCases.Length == 0 ? null :
+            TestCases? testCases = m.TestCases.Length == 0 ? new TestCases([]) :
                 new TestCases(
                     m.TestCases.Select(t =>
                         (t.Inputs.Select(i => new PowerState((byte)i)).ToArray(),
