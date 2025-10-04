@@ -22,8 +22,7 @@ internal class Day2 : Campaign
 
     protected override IEnumerable LevelLogic()
     {
-        bool nextButtonClicked = false;
-        UI.NextButton.Clicked = _ => nextButtonClicked = true;
+        NextButtonClicked += () => NextButtonVisible = false;
 
         AddMenu(new ComponentEntry(Blueprint.NOT));
         AddMenu(new ComponentEntry(Blueprint.AND));
@@ -42,9 +41,10 @@ internal class Day2 : Campaign
         while (!_passAllCases)
             yield return null;
         UI.NextButton.Visible = true;
-        while (!nextButtonClicked)
+
+        NextButtonVisible = true;
+        while (NextButtonVisible)
             yield return null;
-        UI.NextButton.Visible = nextButtonClicked = _passAllCases = false;
 
         CreateNewLogicLevel(2, "XNOR", new TestCases([
             ([PowerState.OffState, PowerState.OffState], [PowerState.OnState]),
@@ -55,10 +55,10 @@ internal class Day2 : Campaign
 
         while (!_passAllCases)
             yield return null;
-        UI.NextButton.Visible = true;
-        while (!nextButtonClicked)
+
+        NextButtonVisible = true;
+        while (NextButtonVisible)
             yield return null;
-        UI.NextButton.Visible = nextButtonClicked = _passAllCases = false;
 
         AddMenu(new ComponentEntry(Blueprint.XOR));
         AddMenu(new ComponentEntry(Blueprint.XNOR));
@@ -80,11 +80,12 @@ internal class Day2 : Campaign
 
         while (!_passAllCases)
             yield return null;
-        UI.NextButton.Visible = true;
+
         UI.NextButton.Text!.Content = "Sandbox";
-        while (!nextButtonClicked)
+
+        NextButtonVisible = true;
+        while (NextButtonVisible)
             yield return null;
-        UI.NextButton.Visible = nextButtonClicked = _passAllCases = false;
 
         var sandbox = new Simulation(9, 9);
         sandbox.Place(Blueprint.Output, new(8, 4), 0, false);

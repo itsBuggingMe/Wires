@@ -19,14 +19,16 @@ internal class EditorUI : RootUI<Graphics>
     public Button NextButton => _nextButton;
     public StackPanel AddMenu => _addMenu;
     public StackPanel CampaignsMenu => _campaignsMenu;
+    public Button NewComponentButton => _chip;
 
-    private StackPanel _menu;
-    private Button _addButton;
-    private Button _playButton;
-    private Button _nextButton;
-    private StackPanel _addMenu;
-    private StackPanel _campaignsMenu;
-    private StackPanel _levelsMenu;
+    private readonly StackPanel _menu;
+    private readonly Button _addButton;
+    private readonly Button _playButton;
+    private readonly Button _nextButton;
+    private readonly StackPanel _addMenu;
+    private readonly StackPanel _campaignsMenu;
+    private readonly StackPanel _levelsMenu;
+    private readonly Button _chip;
 
     private ShortCircuitTooltip? _ssTooltip;
 
@@ -55,26 +57,15 @@ internal class EditorUI : RootUI<Graphics>
     public int TestCaseIndex
     {
         get => _testCaseIndex;
-        set
-        {
-            if (value < 0 || value >= (CurrentEntry?.TestCases?.Length ?? 0))
-                return;
-            _testCaseIndex = value;
-        }
+        set => _testCaseIndex = value;
     }
 
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     public EditorUI(Graphics graphics, SimInteraction interaction) : base(graphics.Game, graphics, 1920, 1080)
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     {
         Interaction = interaction;
-        Init();
-
-        void Init()
-        {
-            Children = [
-            // pancake menu
-            new Button(new(Padding), new(48, false), Button.Pancake)
+        Children = [
+        // pancake menu
+        new Button(new(Padding), new(48, false), Button.Pancake)
             {
                 Children = [_menu = new StackPanel(new(48, Padding), new UIVector2(40), false)
                 {
@@ -109,7 +100,7 @@ internal class EditorUI : RootUI<Graphics>
                     Visible = false,
                 }],
                 Clicked = p => {
-                    _addMenu.Visible = false;
+                    _addMenu!.Visible = false;
                     _menu.Visible = !_menu.Visible;
                 }
             },
@@ -127,6 +118,11 @@ internal class EditorUI : RootUI<Graphics>
                     _menu.Visible = false;
                     _addMenu.Visible = !_addMenu.Visible;
                 }
+            },
+            _chip = new Button(new(Padding, 128 + Padding, false, false), new(48, false), Button.Chip)
+            {
+                Visible = false,
+                Clicked = p => { },
             },
             _playButton = new Button(new(1920 - Padding, Padding), new(64), b => {
                 var sb = b.Graphics.ShapeBatch;
@@ -156,7 +152,12 @@ internal class EditorUI : RootUI<Graphics>
                     }
                 },
                 Children = [
-                    new Text(new(-64 - Padding, Padding, false, false), contentSource: () => CurrentEntry?.TestCases is null ? string.Empty : $"Test {_testCaseIndex + 1}/{CurrentEntry?.TestCases.Length}")
+                    new Text(new(-64 - Padding, Padding, false, false), contentSource: () => CurrentEntry switch
+                    {
+                        { TestCases.Length: 0 } => $"Tick {_testCaseIndex}",
+                        { TestCases.Length: > 0 } => $"Test {_testCaseIndex + 1}/{CurrentEntry?.TestCases.Length}",
+                        _ => string.Empty,
+                    })
                     {
                         ElementAlign = Align.TopRight,
                     }
@@ -167,7 +168,7 @@ internal class EditorUI : RootUI<Graphics>
                 ElementAlign = Align.BottomRight,
                 Text = new Text(new(-140, -30), "Next Level") { ElementAlign = Align.Center },
                 Visible = false,
-                Clicked = p => CurrentCampaign?.NextButtonAction?.Invoke(),
+                Clicked = p => CurrentCampaign?.NextButtonClicked?.Invoke(),
             },
             new Text(new(1920 / 2, Padding), contentSource: () => CurrentEntry?.Name)
             {
@@ -177,76 +178,80 @@ internal class EditorUI : RootUI<Graphics>
         ];
 
 
-            PlaceableComponents.CollectionChanged += (s, e) => {
-                _addMenu.Children = [];
-                foreach (var component in PlaceableComponents)
+        PlaceableComponents.CollectionChanged += (s, e) => {
+            _addMenu.Children = [];
+            foreach (var component in PlaceableComponents)
+            {
+                _addMenu.AddChild(new Button(default, new Vector2(80, 36), Button.None)
                 {
-                    _addMenu.AddChild(new Button(default, new Vector2(80, 36), Button.None)
+                    Text = new Text(new(40, 18), component.Blueprint.Text) { ElementAlign = Align.Center },
+                    RisingEdge = p =>
                     {
-                        Text = new Text(new(40, 18), component.Blueprint.Text) { ElementAlign = Align.Center },
-                        RisingEdge = p =>
-                        {
-                            Interaction?.BeginPlaceComponent(component);
-                        }
-                    });
-                }
+                        Interaction?.BeginPlaceComponent(component);
+                    }
+                });
+            }
 
-                _addButton.Visible = PlaceableComponents.Count != 0;
-            };
+            _addButton.Visible = PlaceableComponents.Count != 0;
+        };
 
-            Campaigns.CollectionChanged += (s, e) => {
-                _campaignsMenu.Children = [];
-                foreach (var campaign in Campaigns)
+        Campaigns.CollectionChanged += (s, e) => {
+            _campaignsMenu.Children = [];
+            foreach (var campaign in Campaigns)
+            {
+                _campaignsMenu.AddChild(new Button(default, new Vector2(120, 40), Button.None)
                 {
-                    _campaignsMenu.AddChild(new Button(default, new Vector2(80, 40), Button.None)
-                    {
-                        Text = new Text(new(40, 20), campaign.Name) { ElementAlign = Align.Center },
-                        RisingEdge = p => {
-                            Interaction?.Reset();
-                            _currentCampaign = campaign;
-                            CampaignSelected?.Invoke(_currentCampaign);
+                    Text = new Text(new(60, 20), campaign.Name) { ElementAlign = Align.Center },
+                    RisingEdge = p => {
+                        Interaction?.Reset();
+                        _currentCampaign = campaign;
+                        CampaignSelected?.Invoke(_currentCampaign);
 
-                            PlaceableComponents.Clear();
-                            foreach (var item in campaign.AddMenuItems)
-                                PlaceableComponents.Add(item);
+                        PlaceableComponents.Clear();
+                        foreach (var item in campaign.AddMenuItems)
+                            PlaceableComponents.Add(item);
 
-                            Levels.Clear();
-                            foreach (var item in campaign.LevelItems)
-                                Levels.Add(item);
-                            
-                            _nextButton.Visible = CurrentCampaign?.NextButtonAction is not null;
+                        Levels.Clear();
+                        foreach (var item in campaign.LevelItems)
+                            Levels.Add(item);
 
-                            if(campaign.LevelItems.Count > 0)
-                                SwitchLevel(campaign.LevelItems[0]);
-                        }
-                    });
-                }
+                        _nextButton.Visible = CurrentCampaign?.NextButtonVisible ?? false;
+                        _chip.Visible = CurrentCampaign?.ComponentEditorButtonVisible ?? false;
 
-                if (Campaigns.Count > 0)
+                        if (campaign.LevelItems.Count > 0)
+                            SwitchLevel(campaign.LevelItems[0]);
+
+                        _levelsMenu.Visible = false;
+                        _campaignsMenu.Visible = false;
+                        _menu.Visible = false;
+                    }
+                });
+            }
+
+            if (Campaigns.Count > 0)
+            {
+                _currentCampaign ??= Campaigns[0];
+            }
+        };
+
+        Levels.CollectionChanged += (s, e) => {
+            _levelsMenu.Children = [];
+            foreach (var l in Levels)
+            {
+                _levelsMenu.AddChild(new Button(default, new Vector2(100, 40), g => { })
                 {
-                    _currentCampaign ??= Campaigns[0];
-                }
-            };
+                    Text = new Text(new(50, 20), l.Name) { ElementAlign = Align.Center },
+                    Clicked = _ => {
+                        SwitchLevel(l);
+                    },
+                });
+            }
 
-            Levels.CollectionChanged += (s, e) => {
-                _levelsMenu.Children = [];
-                foreach (var l in Levels)
-                {
-                    _levelsMenu.AddChild(new Button(default, new Vector2(100, 40), g => { })
-                    {
-                        Text = new Text(new(50, 20), l.Name) { ElementAlign = Align.Center },
-                        Clicked = _ => {
-                            SwitchLevel(l);
-                        },
-                    });
-                }
-
-                if (Levels.Count > 0 && Interaction.ActiveEntry is null)
-                {
-                    SwitchLevel(Levels[0]);
-                }
-            };
-        }
+            if (Levels.Count > 0 && Interaction.ActiveEntry is null)
+            {
+                SwitchLevel(Levels[0]);
+            }
+        };
     }
 
     public override bool Update()
@@ -275,6 +280,7 @@ internal class EditorUI : RootUI<Graphics>
 
         _playButton.Visible = entry.TestCases is not null;
         Interaction.ActiveEntry = entry;
+        NextButton.Visible = CurrentCampaign?.NextButtonVisible ?? false;
         _testCaseIndex = 0;
         _isPlaying = false;
 

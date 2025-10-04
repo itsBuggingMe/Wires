@@ -277,7 +277,7 @@ public partial class MainSimulation : IScreen
 
             if(model.ResultModel is not null)
             {
-                foreach (var level in Levels.CreateComponentEntriesFromModels(_components, [model.ResultModel]))
+                foreach (var level in Levels.ModelsToEntries(_components, [model.ResultModel]))
                     _components.Add(level);
             }
 

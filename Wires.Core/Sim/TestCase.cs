@@ -18,13 +18,13 @@ internal class TestCases
 
     public void Set(int index, PowerState[] inputs, PowerState[] outputs)
     {
-        if(_data is not null)
-        {
-            _data[index].Input.AsSpan().CopyTo(inputs);
-            _data[index].Output.AsSpan().CopyTo(outputs);
-            return;
-        }
+        if (_data is null)
+            throw new InvalidOperationException();
 
-        throw new Exception();
+        if (!((uint)index < (uint)_data.Length))
+            return;
+
+        _data[index].Input.AsSpan().CopyTo(inputs);
+        _data[index].Output.AsSpan().CopyTo(outputs);
     }
 }

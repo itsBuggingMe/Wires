@@ -17,17 +17,10 @@ internal abstract class Campaign
 {
     public List<ComponentEntry> AddMenuItems = [];
     public List<ComponentEntry> LevelItems = [];
-    public Action? NextButtonAction 
-    { 
-        get;
-        set
-        {
-            UI.NextButton.Visible = value is not null;
-            field = value;
-        }
-    }
 
-    protected bool NextButtonClicked => NextButtonAction is null;
+    public Action? NextButtonClicked { get; set; }
+    public bool NextButtonVisible { get; set => field = UI.NextButton.Visible = value; }
+    public bool ComponentEditorButtonVisible { get; set; }
 
     public void AddMenu(ComponentEntry componentEntry)
     {
@@ -75,6 +68,10 @@ internal abstract class Campaign
     }
 
     protected int _timeSinceLastTestCase = 0;
+
+    public virtual void Selected() { }
+    public virtual void Deselected() { }
+
     public void Update(Time gameTime)
     {
         if(UI.IsPlaying)
@@ -98,20 +95,31 @@ internal abstract class Campaign
 
         if (CurrentEntry?.TestCases is not null && _timeSinceLastTestCase > 30 && UI.IsPlaying)
         {
-            _timeSinceLastTestCase = 0;
-
-            TestCaseIndex = (TestCaseIndex + 1) % CurrentEntry.TestCases.Length;
-            CurrentEntry.TestCases.Set(TestCaseIndex, CurrentEntry.Blueprint.InputBufferRaw, _outputTempBuffer);
-
-            ShortCircuitDescription? @short = CurrentEntry.Blueprint.StepStateful();
-
-            if (@short is not null || !CurrentEntry.Blueprint.OutputBufferRaw.AsSpan().SequenceEqual(_outputTempBuffer.AsSpan(0, CurrentEntry.Blueprint.OutputBufferRaw.Length)))
+            if(CurrentEntry.TestCases.Length == 0)
             {
-                UI.IsPlaying = false;
+                _timeSinceLastTestCase = 0;
+                ShortCircuitDescription? @short = CurrentEntry.Blueprint.StepStateful();
+                if(@short is not null)
+                {
+                    UI.IsPlaying = false;
+                }
+                TestCaseIndex++;
             }
-            else if (TestCaseIndex == CurrentEntry.TestCases.Length - 1)
+            else
             {
-                _passAllCases = true;
+                TestCaseIndex = (TestCaseIndex + 1) % CurrentEntry.TestCases.Length;
+                CurrentEntry.TestCases.Set(TestCaseIndex, CurrentEntry.Blueprint.InputBufferRaw, _outputTempBuffer);
+
+                ShortCircuitDescription? @short = CurrentEntry.Blueprint.StepStateful();
+
+                if (@short is not null || !CurrentEntry.Blueprint.OutputBufferRaw.AsSpan().SequenceEqual(_outputTempBuffer.AsSpan(0, CurrentEntry.Blueprint.OutputBufferRaw.Length)))
+                {
+                    UI.IsPlaying = false;
+                }
+                else if (TestCaseIndex == CurrentEntry.TestCases.Length - 1)
+                {
+                    _passAllCases = true;
+                }
             }
         }
     }

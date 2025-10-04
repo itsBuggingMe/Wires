@@ -1,6 +1,8 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Paper.Core;
+using Paper.Core.UI;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -8,9 +10,11 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Wires.Core;
-using Paper.Core;
 using Wires.Core.Sim;
 using Wires.Core.Sim.Saving;
+using Wires.Core.States;
+using Wires.Core.UI;
+using static System.Formats.Asn1.AsnWriter;
 
 namespace Wires.States;
 
@@ -21,7 +25,7 @@ internal class ComponentEditor : IScreen
     private static readonly Blueprint _outputTile = new Blueprint([(Point.Zero, TileKind.Output)], string.Empty);
     private static readonly Blueprint _componentTile = new Blueprint([(Point.Zero, TileKind.Component)], string.Empty);
 
-    private readonly MainSimulation _return;
+    private readonly IScreen _return;
     private readonly Graphics _graphics;
     private readonly Camera2D _camera;
     private readonly ScreenManager _screenManager;
@@ -43,7 +47,9 @@ internal class ComponentEditor : IScreen
 
     const int SimSize = 48;
 
-    public ComponentEditor(MainSimulation @return, Graphics graphics, ScreenManager screenManager)
+    private readonly RootUI<Graphics> _root;
+
+    public ComponentEditor(IScreen @return, Graphics graphics, ScreenManager screenManager)
     {
         _return = @return;
         _graphics = graphics;
@@ -57,6 +63,91 @@ internal class ComponentEditor : IScreen
         graphics.Camera.Position = new Vector2(50) * -(SimSize / 2);
 
         UpdateDummyComponent();
+
+        _root = new RootUI<Graphics>(graphics.Game, graphics, 1920, 1080)
+        {
+            Children = [
+                new Text(new UIVector2(1920/2, Constants.Padding), contentSource: () => _name),
+                new TextInput(new UIVector2(64, 64, false, false), "Component Name")
+                {
+                    Text = new(_name),
+                    TextChanged = sb => { _name = sb.ToString(); UpdateDummyComponent(); },
+                },
+                new TextInput(new UIVector2(64, 128, false, false), "Width", 4)
+                {
+                    Text = new("16"),
+                    ValidateChar = char.IsDigit,
+                    TextChanged = sb => _width = int.TryParse(sb.ToString(), out int x) ? x : 0,
+                },
+                new TextInput(new UIVector2(64, 196, false, false), "Height", 4)
+                {
+                    Text = new("16"),
+                    ValidateChar = char.IsDigit,
+                    TextChanged = sb => _height = int.TryParse(sb.ToString(), out int x) ? x : 0,
+                },
+                new Button(new UIVector2(64, 260, false, false), new UIVector2(195, 64, false, false), b => _outputTile.Draw(_graphics, null, new Point(b.Bounds.Width - 30, b.Bounds.Height / 2) + b.Bounds.Location, 1, Constants.WireRad, false, 0))
+                {
+                    Text = new Text(new(Constants.Padding, 32), "Place Output") { ElementAlign = ElementAlign.LeftMiddle },
+                    RisingEdge = p => _placedTileKind = TileKind.Output,
+                },
+                new Button(new UIVector2(64, 324 + Constants.Padding, false, false), new UIVector2(195, 64, false, false), b => _inputTile.Draw(_graphics, null, new Point(b.Bounds.Width - 35, b.Bounds.Height / 2) + b.Bounds.Location, 1, Constants.WireRad, false, 0))
+                {
+                    Text = new Text(new(Constants.Padding, 32), "Place Input") { ElementAlign = ElementAlign.LeftMiddle },
+                    RisingEdge = p => _placedTileKind = TileKind.Input,
+                },
+                new Button(new UIVector2(64, 420, false, false), new UIVector2(195, 64, false, false), b => {
+                    Vector2 mapPos = (new Point(b.Bounds.Width - 45, b.Bounds.Height / 2) + b.Bounds.Location).ToVector2();
+                    float scale = 40;
+                    _graphics.ShapeBatch.DrawRectangle(mapPos - new Vector2(scale) * 0.5f, new(scale), new Color(181, 14, 59), new(156, 3, 46), 3, 8);
+                })
+                {
+                    Text = new Text(new(Constants.Padding, 32), "Place Tile") { ElementAlign = ElementAlign.LeftMiddle },
+                    RisingEdge = p => _placedTileKind = TileKind.Component,
+                },
+                new Text(new UIVector2(32, 1080 - 64, false, true), null, () => _errorText),
+                new Button(new UIVector2(1920- Constants.Padding, 1080 - Constants.Padding), new UIVector2(120, 48, false, false), Button.None)
+                {
+                    Text = new Text(new(-60, -24, false, false), "Save") { ElementAlign = ElementAlign.Center },
+                    ElementAlign = ElementAlign.BottomRight,
+                    Clicked = p =>
+                    {
+                        SetErrorText(string.Empty);
+                        if (_width < 4)
+                        {
+                            SetErrorText("Invalid Width Value (Must be >= 4)");
+                            return;
+                        }
+                        if (_height < Math.Max(_inputs.Count, _outputs.Count))
+                        {
+                            SetErrorText("Invalid Height Value (Not enough space for inputs/outputs)");
+                            return;
+                        }
+                        if (string.IsNullOrWhiteSpace(_name))
+                        {
+                            SetErrorText("Invalid Name Value");
+                            return;
+                        }
+                        if ((_return as CampaignState)?.EditorUI.CurrentCampaign?.AddMenuItems.Any(c => c.Name == _name) ?? false)
+                        {
+                            SetErrorText($"Component with name {_name} already exists.");
+                            return;
+                        }
+
+                        _screenManager.SwitchScreen(_return);
+                    }
+                },
+                new Button(new UIVector2(1920 - Constants.Padding, Constants.Padding), new UIVector2(120, 48, false, false), Button.None)
+                {
+                    Text = new Text(new(-60, 24, false, false), "Cancel") { ElementAlign = ElementAlign.Center },
+                    ElementAlign = ElementAlign.TopRight,
+                    Clicked = p =>
+                    {
+                        _isCancel = true;
+                        _screenManager.SwitchScreen(_return);
+                    }
+                }
+            ]
+        };
     }
 
     // TODO: refactor camera and tile utils out
@@ -64,6 +155,9 @@ internal class ComponentEditor : IScreen
 
     public void Update(Time gameTime)
     {
+        if (_root.DoUpdate())
+            return;
+
         if (InputHelper.RisingEdge(MouseButton.Left) || InputHelper.RisingEdge(MouseButton.Right))
             SetErrorText();
 
@@ -168,9 +262,10 @@ internal class ComponentEditor : IScreen
         _componentId = _displaySim.Place(blueprint, new Point(SimSize / 2), 0);
     }
 
+    private string _errorText = "";
     private void SetErrorText(string str = "")
     {
-
+        _errorText = str;
     }
 
     public void Draw(Time gameTime)
@@ -209,6 +304,16 @@ internal class ComponentEditor : IScreen
         _graphics.ShapeBatch.End();
         _graphics.SpriteBatch.End();
         _graphics.SpriteBatchText.End();
+
+        _graphics.ShapeBatch.Begin();
+        _graphics.SpriteBatch.Begin();
+        _graphics.SpriteBatchText.Begin(samplerState: SamplerState.PointClamp);
+
+        _root.DoDraw();
+
+        _graphics.ShapeBatch.End();
+        _graphics.SpriteBatch.End();
+        _graphics.SpriteBatchText.End();
     }
 
     public void OnEnter(IScreen previous, object? args)
@@ -220,6 +325,8 @@ internal class ComponentEditor : IScreen
 
     public object? OnExit()
     {
+        _root.Dispose();
+
         if (_isCancel)
             return new ComponentEditorResult(null);
 

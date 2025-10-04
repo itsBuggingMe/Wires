@@ -36,6 +36,34 @@ internal class Button : BorderedElement
         b.Graphics.ShapeBatch.FillLine(new Vector2(pos.X, pos.Y + sizeHalf.Y), new Vector2(pos.X + size.X, pos.Y + sizeHalf.Y), 3f, Constants.UILight * b.TactileFeedback);
     };
 
+    public static readonly Action<Button> Chip = b =>
+    {
+        const int Padding = 14;
+
+        Vector2 pos = b.Position + new Vector2(Padding);
+        Vector2 size = b.Size - 2 * new Vector2(Padding);
+        Vector2 sizeHalf = size * 0.5f;
+        float sideThird = size.X / 3;
+
+        var color = Constants.UILight * b.TactileFeedback;
+
+        b.Graphics.ShapeBatch.BorderRectangle(pos, size, color, 4f, 2);
+        Line(new(sideThird, 0), -Vector2.UnitY);
+        Line(new(sideThird * 2, 0), -Vector2.UnitY);
+        Line(new(sideThird, size.Y), Vector2.UnitY);
+        Line(new(sideThird * 2, size.Y), Vector2.UnitY);
+
+        Line(new(0, sideThird), -Vector2.UnitX);
+        Line(new(0, sideThird * 2), -Vector2.UnitX);
+        Line(new(size.Y, sideThird), Vector2.UnitX);
+        Line(new(size.Y, sideThird * 2), Vector2.UnitX);
+
+        void Line(Vector2 offset, Vector2 direction)
+        {
+            Vector2 a = pos + offset;
+            b.Graphics.ShapeBatch.FillLine(a, a + direction * 2, 2f, color, aaSize: 0);
+        }
+    };
 
     public static readonly Action<Button> None = b => { };
 

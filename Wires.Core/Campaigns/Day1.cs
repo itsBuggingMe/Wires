@@ -23,7 +23,7 @@ internal class Day1 : Campaign
     protected override IEnumerable LevelLogic()
     {
         // this sucks
-        Action nextLevel = () => NextButtonAction = null;
+        NextButtonClicked += () => NextButtonVisible = false;
 
         var level1 = new Simulation(9, 9);
         level1.Place(Blueprint.Output, new(8, 4), 0, false);
@@ -34,8 +34,8 @@ internal class Day1 : Campaign
         while (LevelItems[0].Blueprint.OutputBuffer(0).Off)
             yield return null;
 
-        NextButtonAction = nextLevel;
-        while (!NextButtonClicked)
+        NextButtonVisible = true;
+        while (NextButtonVisible)
             yield return null;
 
         var level2 = new Simulation(9, 9);
@@ -72,8 +72,8 @@ internal class Day1 : Campaign
             yield return null;
         }
 
-        NextButtonAction = nextLevel;
-        while (!NextButtonClicked)
+        NextButtonVisible = true;
+        while (NextButtonVisible)
             yield return null;
 
         var level3 = new Simulation(9, 9);
@@ -142,8 +142,8 @@ internal class Day1 : Campaign
             return result;
         }
 
-        NextButtonAction = nextLevel;
-        while (!NextButtonClicked)
+        NextButtonVisible = true;
+        while (NextButtonVisible)
             yield return null;
 
         UI.AddButton.Visible = true;
@@ -160,8 +160,9 @@ internal class Day1 : Campaign
 
         while (!_passAllCases)
             yield return null;
-        NextButtonAction = nextLevel;
-        while (!NextButtonClicked)
+
+        NextButtonVisible = true;
+        while (NextButtonVisible)
             yield return null;
 
         CreateNewLogicLevel(4, "OR", new TestCases([
@@ -173,8 +174,9 @@ internal class Day1 : Campaign
 
         while (!_passAllCases)
             yield return null;
-        NextButtonAction = nextLevel;
-        while (!NextButtonClicked)
+
+        NextButtonVisible = true;
+        while (NextButtonVisible)
             yield return null;
 
         CreateNewLogicLevel(5, "NOR", new TestCases([
@@ -186,9 +188,9 @@ internal class Day1 : Campaign
 
         while (!_passAllCases)
             yield return null;
-        NextButtonAction = nextLevel;
-        UI.NextButton.Text!.Content = "Sandbox";
-        while (!NextButtonClicked)
+
+        NextButtonVisible = true;
+        while (NextButtonVisible)
             yield return null;
 
         var sandbox = new Simulation(9, 9);

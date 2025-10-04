@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Campaign.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Sandbox.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day2.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day1.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Constants.cs" />
@@ -35,6 +36,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)UI\Button.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\ScrollViewer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\Text.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UI\TextInput.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UI\TruthTable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)WiresGame.cs" />
   </ItemGroup>
