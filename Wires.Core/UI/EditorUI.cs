@@ -202,7 +202,7 @@ internal class EditorUI : RootUI<Graphics>
                 _campaignsMenu.AddChild(new Button(default, new Vector2(120, 40), Button.None)
                 {
                     Text = new Text(new(60, 20), campaign.Name) { ElementAlign = Align.Center },
-                    RisingEdge = p => {
+                    Clicked = p => {
                         Interaction?.Reset();
                         _currentCampaign = campaign;
                         CampaignSelected?.Invoke(_currentCampaign);
