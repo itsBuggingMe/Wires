@@ -107,8 +107,9 @@ internal abstract class Campaign
             }
             else
             {
-                TestCaseIndex = (TestCaseIndex + 1) % CurrentEntry.TestCases.Length;
+                TestCaseIndex = TestCaseIndex % CurrentEntry.TestCases.Length;
                 CurrentEntry.TestCases.Set(TestCaseIndex, CurrentEntry.Blueprint.InputBufferRaw, _outputTempBuffer);
+                _timeSinceLastTestCase = 0;
 
                 ShortCircuitDescription? @short = CurrentEntry.Blueprint.StepStateful();
 
@@ -119,6 +120,11 @@ internal abstract class Campaign
                 else if (TestCaseIndex == CurrentEntry.TestCases.Length - 1)
                 {
                     _passAllCases = true;
+                    UI.IsPlaying = false;
+                }
+                else
+                {
+                    TestCaseIndex = (TestCaseIndex + 1) % CurrentEntry.TestCases.Length;
                 }
             }
         }

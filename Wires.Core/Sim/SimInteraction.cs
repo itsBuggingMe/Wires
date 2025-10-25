@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Input;
 using Paper.Core;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 
 namespace Wires.Core.Sim;
@@ -79,7 +80,13 @@ internal class SimInteraction
             if (_activeDragDrop is not null && InputHelper.FallingEdge(MouseButton.Left))
             {
                 sim.Place(_activeDragDrop.Blueprint, GetTileOver(), _rotation);
-                _activeDragDrop = null;
+                Step();
+                return;
+            }
+
+            if (_activeDragDrop is not null && InputHelper.Down(MouseButton.Right))
+            {
+                sim.Place(_activeDragDrop.Blueprint, GetTileOver(), _rotation);
                 Step();
                 return;
             }
@@ -130,7 +137,7 @@ internal class SimInteraction
                 return;
             }
 
-            if (MouseButton.Right.FallingEdge())
+            if (MouseButton.Right.FallingEdge() && _activeDragDrop is null)
             {
                 if (sim.IdOfWireAt(tileOver) is int id)
                 {

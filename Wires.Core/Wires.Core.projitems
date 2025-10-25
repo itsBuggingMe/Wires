@@ -10,8 +10,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Campaign.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Sandbox.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day2.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Sandbox.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day3.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day1.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Constants.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Graphics.cs" />

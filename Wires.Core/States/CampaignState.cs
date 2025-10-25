@@ -24,6 +24,7 @@ internal class CampaignState : IScreen
 
 
         Campaign[] campaigns = [
+            new Day3(serviceContainer, graphics, _editorUI, _interaction),
             new Day2(serviceContainer, graphics, _editorUI, _interaction),
             new Day1(serviceContainer, graphics, _editorUI, _interaction),
             new Sandbox(serviceContainer, this, graphics, _editorUI, _interaction),

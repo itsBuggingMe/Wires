@@ -535,7 +535,7 @@ public class Simulation
         }
 
         _components.Create(out int id) = new() { Blueprint = blueprint, Position = position, Exists = true, AllowDelete = allowDelete, InputOutputId = inputOutputId };
-
+        Debug.WriteLine(id);
         if(blueprint.Descriptor is Blueprint.IntrinsicBlueprint.On or 
             Blueprint.IntrinsicBlueprint.Off or 
             Blueprint.IntrinsicBlueprint.Input or 
