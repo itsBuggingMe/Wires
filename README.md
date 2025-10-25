@@ -2,6 +2,10 @@
 
 Wires is a WIP digital logic simulator for fun and use as a learning tool. It is currently hosted at [uarch.space](https://www.uarch.space/).
 
+Use the hamburger menu on the left to select days.
+
+Alt + S to save and Alt + L to load (Only works in sandbox). 
+
 Slides:
 
 [Day 1](https://www.uarch.space/slides/day1.pdf)
