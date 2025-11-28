@@ -221,6 +221,7 @@ internal class EditorUI : RootUI<Graphics>
                         if (campaign.LevelItems.Count > 0)
                             SwitchLevel(campaign.LevelItems[0]);
 
+                        Interaction?.Reset();
                         _levelsMenu.Visible = false;
                         _campaignsMenu.Visible = false;
                         _menu.Visible = false;

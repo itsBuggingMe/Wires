@@ -30,8 +30,8 @@ internal class ComponentEditor : IScreen
     private readonly Camera2D _camera;
     private readonly ScreenManager _screenManager;
 
-    private int _width = 9;
-    private int _height = 9;
+    private int _width = 0;
+    private int _height = 0;
     private string _name = "NAME";
     private Simulation _displaySim;
 
@@ -75,13 +75,13 @@ internal class ComponentEditor : IScreen
                 },
                 new TextInput(new UIVector2(64, 128, false, false), "Width", 4)
                 {
-                    Text = new("16"),
+                    Text = new(""),
                     ValidateChar = char.IsDigit,
                     TextChanged = sb => _width = int.TryParse(sb.ToString(), out int x) ? x : 0,
                 },
                 new TextInput(new UIVector2(64, 196, false, false), "Height", 4)
                 {
-                    Text = new("16"),
+                    Text = new(""),
                     ValidateChar = char.IsDigit,
                     TextChanged = sb => _height = int.TryParse(sb.ToString(), out int x) ? x : 0,
                 },

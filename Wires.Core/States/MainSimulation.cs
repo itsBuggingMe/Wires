@@ -60,6 +60,8 @@ public partial class MainSimulation : IScreen
         _graphics = graphics;
         _screenManager = screenManager;
         _camera = camera;
+        _sb = _graphics.ShapeBatch;
+
         AddComponent(new(Blueprint.NAND));
 
         foreach (var c in Levels.LoadLevels(_components))
@@ -83,7 +85,8 @@ public partial class MainSimulation : IScreen
             {
                 if (_currentEntry.TestCases is null || _currentEntry.TestCases.Length == 0)
                 {
-                    _currentEntry?.Blueprint?.StepStateful();
+                    throw new NotImplementedException();
+                    //_currentEntry?.Blueprint?.StepStateful();
                     //if (_state is not null && !_state.MoveNext())
                     //    CurrentEntry.Custom?.RecordDelayValues();
                 }
@@ -123,8 +126,9 @@ public partial class MainSimulation : IScreen
     private void ResetSimulation()
     {
         CurrentTestCaseIndex = 0;
-        _currentEntry?.Custom?.ClearAllDelayValues();
-        _shortCircuitErr = _currentEntry?.Blueprint.Reset();
+        throw new NotImplementedException();
+        //_currentEntry?.Custom?.ClearAllDelayValues();
+        //_shortCircuitErr = _currentEntry?.Blueprint.Reset();
     }
 
     private void TestTestCase()
@@ -132,7 +136,8 @@ public partial class MainSimulation : IScreen
         if(_currentEntry is { TestCases: { } cases, Blueprint: { } blueprint })
         {
             cases.Set(CurrentTestCaseIndex, blueprint.InputBufferRaw, _outputTempBuffer);
-            blueprint.StepStateful();
+        throw new NotImplementedException();
+            //blueprint.StepStateful();
 
             if (!blueprint.OutputBufferRaw.AsSpan().SequenceEqual(_outputTempBuffer.AsSpan(0, blueprint.OutputBufferRaw.Length)))
             {
@@ -236,7 +241,7 @@ public partial class MainSimulation : IScreen
                 && _simDragReason == SimDragReason.PlaceWire)
             {
                 var colors = Constants.GetWireColor(PowerState.OffState);
-                _currentEntry?.Custom?.DrawWire(_sb, Step, new Wire(dragStart, over), colors.Color * 0.5f, colors.Output * 0.5f);
+                _currentEntry?.Custom?.DrawWire(_graphics, Step, new Wire(dragStart, over), colors.Color * 0.5f, colors.Output * 0.5f);
             }
         }
 
@@ -277,8 +282,7 @@ public partial class MainSimulation : IScreen
 
             if(model.ResultModel is not null)
             {
-                foreach (var level in Levels.ModelsToEntries(_components, [model.ResultModel]))
-                    _components.Add(level);
+                Levels.AddModelsToEntries(_components, [model.ResultModel]);
             }
 
             foreach (var entry in _components)

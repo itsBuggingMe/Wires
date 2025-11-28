@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Campaign.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day2.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day4.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Sandbox.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day3.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day1.cs" />
@@ -18,6 +19,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Graphics.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Blueprint.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\ComponenEntry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sim\GlobalStateTable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\TruthTableData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Saving\Levels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Saving\Models.cs" />

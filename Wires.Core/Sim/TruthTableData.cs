@@ -67,4 +67,25 @@ record TruthTableData(ImmutableArray<string> Headers, bool[][] Rows)
                 [ false, true, false ],
                 [ false, false, true ]
         ]);
+    public static readonly TruthTableData HALF_ADDER = new(
+    ["A", "B", "S", "C"],
+    [
+        [ false, false, false, false ],
+            [ false, true,  true,  false ],
+            [ true,  false, true,  false ],
+            [ true,  true,  false, true  ]
+    ]);
+
+    public static readonly TruthTableData FULL_ADDER = new(
+        ["A", "B", "C", "S", "O"],
+        [
+            [ false, false, false, false, false ],
+            [ false, false, true,  true,  false ],
+            [ false, true,  false, true,  false ],
+            [ false, true,  true,  false, true  ],
+            [ true,  false, false, true,  false ],
+            [ true,  false, true,  false, true  ],
+            [ true,  true,  false, false, true  ],
+            [ true,  true,  true,  true,  true  ]
+        ]);
 }

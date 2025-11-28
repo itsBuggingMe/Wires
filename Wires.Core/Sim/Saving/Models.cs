@@ -96,4 +96,5 @@ internal class WireModel
     public int AY { get; init; }
     public int BX { get; init; }
     public int BY { get; init; }
+    public bool IsBundle { get; init; }
 }

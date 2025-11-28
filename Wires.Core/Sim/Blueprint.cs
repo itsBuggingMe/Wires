@@ -63,16 +63,6 @@ public class Blueprint
     public PowerState[] OutputBufferRaw => _outputBuffer;
     private PowerState[] _outputBuffer;
 
-    public PowerState DelayValue
-    {
-        get
-        {
-            Debug.Assert(Descriptor == IntrinsicBlueprint.Delay);
-            return _state;
-        }
-        set => _state = value;
-    }
-
     public PowerState SwitchValue
     {
         get
@@ -150,30 +140,32 @@ public class Blueprint
 
     public Blueprint Clone(int rotation) => new Blueprint(_data, rotation);
 
-    public ShortCircuitDescription? Reset()
+    public ShortCircuitDescription? Reset(GlobalStateTable globalStateTable, ulong previousHash)
     {
         if (Custom is null)
             return null;
-        Custom.ClearAllDelayValues();
-        return StepStateful();
+        return StepStateful(globalStateTable, previousHash);
     }
 
-    public ShortCircuitDescription? StepStateful(bool recordDelayValue = true)
+    public ShortCircuitDescription? SimulateTick(GlobalStateTable globalStateTable)
+    {
+        var s = StepStateful(globalStateTable, 92821);
+
+        if(s is null) globalStateTable.SwapBuffers();
+
+        return s;
+    }
+
+    public ShortCircuitDescription? StepStateful(GlobalStateTable stateTable, ulong previousHash)
     {
         if (Custom is null)
             return null;
 
-        var enumerator = Custom.StepEnumerator(this).GetEnumerator();
+        var enumerator = Custom.StepEnumerator(this, stateTable, previousHash).GetEnumerator();
         while (enumerator.MoveNext())
         {
             if(enumerator.Current is ShortCircuitDescription err)
                 return err;
-        }
-
-
-        if (recordDelayValue)
-        {
-            Custom.RecordDelayValues();
         }
 
         return null;
@@ -393,6 +385,16 @@ public class Blueprint
             (new Point(1, 0), TileKind.Output),
         ], nameof(XNOR), IntrinsicBlueprint.XNOR);
 
+    public static readonly Blueprint FullAdder = new([
+            (new Point(0, 0), TileKind.Component),
+            (new Point(0, 1), TileKind.Component),
+            (new Point(0, -1), TileKind.Input),
+            (new Point(-1, 1), TileKind.Input),
+            (new Point(-1, 0), TileKind.Input),
+            (new Point(1, 0), TileKind.Output),
+            (new Point(1, 1), TileKind.Output),
+        ], "ADD1", IntrinsicBlueprint.FullAdder);
+
     public enum IntrinsicBlueprint
     {
         None,
@@ -415,5 +417,7 @@ public class Blueprint
         NOR,
         XOR,
         XNOR,
+
+        FullAdder,
     }
 }

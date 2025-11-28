@@ -14,20 +14,23 @@ internal class CampaignState : IScreen
 
     private readonly EditorUI _editorUI;
     private readonly SimInteraction _interaction;
+    private readonly GlobalStateTable _globalStateTable;
 
     public ComponentEditorResult? EditorOutput;
 
+
     public CampaignState(ServiceContainer serviceContainer, Graphics graphics)
     {
-        _interaction = new SimInteraction(graphics);
+        _interaction = new SimInteraction(graphics, _globalStateTable = new GlobalStateTable());
         _editorUI = new EditorUI(graphics, _interaction);
 
 
         Campaign[] campaigns = [
-            new Day3(serviceContainer, graphics, _editorUI, _interaction),
-            new Day2(serviceContainer, graphics, _editorUI, _interaction),
-            new Day1(serviceContainer, graphics, _editorUI, _interaction),
-            new Sandbox(serviceContainer, this, graphics, _editorUI, _interaction),
+            new Sandbox(serviceContainer, this, graphics, _editorUI, _interaction) { StateTable = _globalStateTable },
+            new Day4(serviceContainer, graphics, _editorUI, _interaction) { StateTable = _globalStateTable },
+            new Day3(serviceContainer, graphics, _editorUI, _interaction) { StateTable = _globalStateTable },
+            new Day2(serviceContainer, graphics, _editorUI, _interaction) { StateTable = _globalStateTable },
+            new Day1(serviceContainer, graphics, _editorUI, _interaction) { StateTable = _globalStateTable },
         ];
 
         foreach (var campaign in campaigns)

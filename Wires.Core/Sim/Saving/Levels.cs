@@ -104,7 +104,7 @@ internal static class Levels
         byte[] bytes = HttpUtility.UrlDecodeToBytes(data);
         using var ms = new MemoryStream(bytes);
         var models = ReadBinaryFormatModels(ms);
-        return ModelsToEntries(existingEntries, models);
+        return AddModelsToEntries(existingEntries, models);
     }
 
     public static string SaveToJson(List<ComponentEntry> simulations)
@@ -116,7 +116,7 @@ internal static class Levels
     public static void LoadFromJson(List<ComponentEntry> existingEntries, string json)
     {
         var models = JsonSerializer.Deserialize<LevelModel[]>(json);
-        existingEntries.AddRange(ModelsToEntries(existingEntries, models ?? []));
+        existingEntries.AddRange(AddModelsToEntries(existingEntries, models ?? []));
     }
 
     public static void BinaryFormatModels(Stream outputStream, LevelModel[] models)
@@ -167,6 +167,7 @@ internal static class Levels
                 br.Write7BitEncodedInt(wireModel.AY);
                 br.Write7BitEncodedInt(wireModel.BX);
                 br.Write7BitEncodedInt(wireModel.BY);
+                br.Write(wireModel.IsBundle);
             }
         }
     }
@@ -246,7 +247,8 @@ internal static class Levels
                     AX = br.Read7BitEncodedInt(),
                     AY = br.Read7BitEncodedInt(),
                     BX = br.Read7BitEncodedInt(),
-                    BY = br.Read7BitEncodedInt()
+                    BY = br.Read7BitEncodedInt(),
+                    IsBundle = br.ReadBoolean(),
                 };
             }
 
@@ -265,16 +267,42 @@ internal static class Levels
         return models;
     }
 
-    public static IEnumerable<ComponentEntry> ModelsToEntries(List<ComponentEntry> existingEntries, LevelModel[] levels)
+    public static IEnumerable<ComponentEntry> AddModelsToEntries(List<ComponentEntry> existingEntries, LevelModel[] levels)
     {
-        return levels.Select(m =>
+        ComponentEntry[] added = levels.Select(m =>
         {
-            if (existingEntries.Any(e => e.Name == m.Name))
-                return null;
+            var display = m.ComponentTiles.Select(t => (new Point(t.X, t.Y), t.TileKind switch
+            {
+                nameof(TileKind.Input) => TileKind.Input,
+                nameof(TileKind.Output) => TileKind.Output,
+                nameof(TileKind.Component) => TileKind.Component,
+                _ => throw new Exception($"Unknown tile kind: {t.TileKind}")
+            })).ToImmutableArray();
 
-            Simulation simulation = new Simulation(m.GridWidth, m.GridHeight);
+            Blueprint blueprint = new Blueprint(new(m.GridWidth, m.GridHeight), m.Name, display);
 
-            foreach (var component in m.Components)
+            TestCases testCases = m.TestCases.Length == 0 ? new TestCases([]) :
+                new TestCases(
+                    m.TestCases.Select(t =>
+                        (t.Inputs.Select(i => new PowerState((byte)i)).ToArray(),
+                        t.Outputs.Select(i => new PowerState((byte)i)).ToArray())
+                        ).ToArray());
+
+            return new ComponentEntry(blueprint, testCases);
+        }).ToArray();
+
+        existingEntries.AddRange(added);
+
+        foreach(var (entry, model) in added.Zip(levels))
+        {
+            Simulation simulation = entry.Custom!;
+
+            foreach (var wire in model.Wires ?? [])
+            {
+                simulation.CreateWire(new Wire(new(wire.AX, wire.AY), new(wire.BX, wire.BY)) { WireKind = wire.IsBundle });
+            }
+
+            foreach (var component in model.Components)
             {
                 simulation.Place(component.BlueprintName switch
                 {
@@ -284,29 +312,9 @@ internal static class Levels
                         throw new System.Exception($"Could not find blueprint of name: {component.BlueprintName}")
                 }, new(component.X, component.Y), component.Rotation, component.AllowDelete, component.InputOutputId ?? 0, component.SwcState ?? false);
             }
+        }
 
-            foreach (var wire in m.Wires ?? [])
-            {
-                simulation.CreateWire(new Wire(new(wire.AX, wire.AY), new(wire.BX, wire.BY)));
-            }
-
-            TestCases? testCases = m.TestCases.Length == 0 ? new TestCases([]) :
-                new TestCases(
-                    m.TestCases.Select(t =>
-                        (t.Inputs.Select(i => new PowerState((byte)i)).ToArray(),
-                        t.Outputs.Select(i => new PowerState((byte)i)).ToArray())
-                        ).ToArray());
-
-            return new ComponentEntry(new Blueprint(simulation, m.Name,
-                m.ComponentTiles.Select(t => (new Point(t.X, t.Y), t.TileKind switch
-                {
-                    nameof(TileKind.Input) => TileKind.Input,
-                    nameof(TileKind.Output) => TileKind.Output,
-                    nameof(TileKind.Component) => TileKind.Component,
-                    _ => throw new System.Exception($"Unknown tile kind: {t.TileKind}")
-                })).ToImmutableArray()),
-                testCases);
-        }).Where(n => n is not null)!;
+        return added;
     }
 
     public static LevelModel[] EntriesToModels(List<ComponentEntry> simulations)
@@ -352,6 +360,7 @@ internal static class Levels
                         AY = w.A.Y,
                         BX = w.B.X,
                         BY = w.B.Y,
+                        IsBundle = w.WireKind,
                     })
                     .ToArray(),
             })

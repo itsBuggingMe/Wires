@@ -58,7 +58,7 @@ internal class Day1 : Campaign
             PowerState TestOutputPower(PowerState input, Blueprint b)
             {
                 b.SwitchValue = input;
-                level2Blueprint.StepStateful();
+                level2Blueprint.SimulateTick(StateTable);
                 return level2Blueprint.OutputBuffer(0);
             }
 
@@ -68,7 +68,7 @@ internal class Day1 : Campaign
             }
 
             @switch.Blueprint.SwitchValue = oldPowerState;
-            level2Blueprint.StepStateful();
+            level2Blueprint.SimulateTick(StateTable);
             yield return null;
         }
 
@@ -124,7 +124,7 @@ internal class Day1 : Campaign
                     blueprint.Custom.GetComponent(id).Blueprint.SwitchValue = state;
                 }
 
-                blueprint.StepStateful();
+                blueprint.SimulateTick(StateTable);
 
                 if (expected[index++] != blueprint.OutputBuffer(0))
                 {
@@ -137,7 +137,7 @@ internal class Day1 : Campaign
             foreach (var componentId in inputs[0])
                 blueprint.Custom.GetComponent(componentId.ComponentId).Blueprint.SwitchValue = oldStates[index++];
 
-            blueprint.StepStateful();
+            blueprint.SimulateTick(StateTable);
 
             return result;
         }

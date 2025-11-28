@@ -12,6 +12,7 @@ public struct Wire(Point a, Point b) : IFreeListId
     /// </summary>
     public Point A = a;
     public Point B = b;
+    public bool WireKind;
 
     public PowerState PowerState;
     public bool Exists = true;

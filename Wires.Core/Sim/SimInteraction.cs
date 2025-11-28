@@ -4,6 +4,7 @@ using Paper.Core;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Security.AccessControl;
 using System.Text;
 
 namespace Wires.Core.Sim;
@@ -14,6 +15,7 @@ internal class SimInteraction
     private int _rotation;
     private int? _draggedComponentId;
     private Point? _wireDragStart;
+    private bool _currentPlacedIsBundle = true;
     private Point _wireDragCurrent;
 
     private readonly Camera2D _camera;
@@ -35,8 +37,9 @@ internal class SimInteraction
 
     public Simulation? ActiveSim => ActiveEntry?.Custom;
 
-    public SimInteraction(Graphics graphics)
+    public SimInteraction(Graphics graphics, GlobalStateTable stateTable)
     {
+        _globalStateTable = stateTable;
         _camera = graphics.Camera;
         _graphics = graphics;
     }
@@ -47,7 +50,7 @@ internal class SimInteraction
             return;
         UpdateCore();
 
-        if(!MouseButton.Left.Down())
+        if(!MouseButton.Left.Down() && !MouseButton.Right.Down())
         {
             _wireDragStart = default;
             _draggedComponentId = default;
@@ -79,8 +82,11 @@ internal class SimInteraction
             // placing components
             if (_activeDragDrop is not null && InputHelper.FallingEdge(MouseButton.Left))
             {
-                sim.Place(_activeDragDrop.Blueprint, GetTileOver(), _rotation);
-                Step();
+                if(_activeDragDrop.Blueprint.Custom != sim)
+                {
+                    sim.Place(_activeDragDrop.Blueprint, GetTileOver(), _rotation);
+                    Step();
+                }
                 return;
             }
 
@@ -98,10 +104,11 @@ internal class SimInteraction
             }
 
             // placing wires
-            if (InputHelper.RisingEdge(MouseButton.Left) && (sim[tileOver] is { Kind: TileKind.Input or TileKind.Output } || sim.HasWiresAt(tileOver)))
+            if ((InputHelper.RisingEdge(MouseButton.Left) || InputHelper.RisingEdge(MouseButton.Right)) && (sim[tileOver] is { Kind: TileKind.Input or TileKind.Output } || sim.HasWiresAt(tileOver)))
             {
                 _wireDragStart = tileOver;
                 _wireDragCurrent = tileOver;
+                _currentPlacedIsBundle = InputHelper.RisingEdge(MouseButton.Right);
                 return;
             }
 
@@ -110,9 +117,9 @@ internal class SimInteraction
                 _wireDragCurrent = tileOver;
             }
 
-            if (_wireDragStart is not null && !InputHelper.Down(MouseButton.Left) && _wireDragStart != _wireDragCurrent)
+            if (_wireDragStart is not null && !(_currentPlacedIsBundle ? InputHelper.Down(MouseButton.Right) : InputHelper.Down(MouseButton.Left)) && _wireDragStart != _wireDragCurrent)
             {
-                sim.CreateWire(new Wire { A = _wireDragStart.Value, B = _wireDragCurrent });
+                sim.CreateWire(new Wire { A = _wireDragStart.Value, B = _wireDragCurrent, WireKind = _currentPlacedIsBundle });
                 _wireDragStart = null;
                 Step();
                 return;
@@ -154,10 +161,13 @@ internal class SimInteraction
         }
     }
 
+    private GlobalStateTable _globalStateTable;
+    public GlobalStateTable State => _globalStateTable;
+
     public void Step()
     {
-        ActiveEntry?.Custom?.ClearAllDelayValues();
-        ShortCircuitDescription = ActiveEntry?.Blueprint.Reset();
+        _globalStateTable.Reset();
+        ShortCircuitDescription = ActiveEntry?.Blueprint.Reset(_globalStateTable, 92821 /*this is root!*/);
     }
 
     public void UpdateCamera()
@@ -200,8 +210,10 @@ internal class SimInteraction
         if (_wireDragStart is Point dragStart
             && _wireDragCurrent != dragStart)
         {
-            var colors = Constants.GetWireColor(PowerState.OffState);
-            ActiveSim.DrawWire(_graphics.ShapeBatch, Constants.Scale, new Wire(dragStart, _wireDragCurrent), colors.Color * 0.5f, colors.Output * 0.5f);
+            var colors = _currentPlacedIsBundle ?
+                Constants.BundleWireColor :
+                Constants.GetWireColor(PowerState.OffState);
+            ActiveSim.DrawWire(_graphics, Constants.Scale, new Wire(dragStart, _wireDragCurrent), colors.Color * 0.5f, colors.Output * 0.5f);
         }
     }
     private Point GetTileOver() => ((_camera.ScreenToWorld(InputHelper.MouseLocation.ToVector2()) - new Vector2(-50 / 2)) / new Vector2(50)).ToPoint();

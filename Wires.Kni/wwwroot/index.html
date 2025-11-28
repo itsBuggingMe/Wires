@@ -73,6 +73,27 @@
     <script src="_content/nkast.Wasm.XR/js/XR.8.0.5.js"></script>
 
     <script>
+
+        document.addEventListener(
+            "keydown",
+            function (e) {
+                if ((e.metaKey || e.ctrlKey) && e.code === "KeyO") {
+                    e.preventDefault();
+                }
+            },
+            false
+        );
+
+        document.addEventListener(
+            "keydown",
+            function (e) {
+                if ((e.metaKey || e.ctrlKey) && e.code === "KeyS") {
+                    e.preventDefault();
+                }
+            },
+            false
+        );
+
         window.openFile = async () => {
             const input = document.createElement("input");
             input.type = "file";
@@ -93,11 +114,20 @@
             input.click();
         }
 
-        window.saveFile = async (textToCopy) => {
-            if (navigator?.clipboard?.writeText) {
-                await navigator.clipboard.writeText(textToCopy);
-            }
-        }
+        window.saveFile = async (textToSave, filename = "save.json") => {
+            const blob = new Blob([textToSave], { type: "text/plain" });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            a.style.display = "none";
+            document.body.appendChild(a);
+
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
 
 
         window.setStorage = (name, value) => {

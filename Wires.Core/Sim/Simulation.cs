@@ -99,7 +99,7 @@ public class Simulation
         }
     }
 
-    public IEnumerable<ShortCircuitDescription?> StepEnumerator(Blueprint blueprint)
+    public IEnumerable<ShortCircuitDescription?> StepEnumerator(Blueprint blueprint, GlobalStateTable state, ulong previousAddressHash)
     {
         CurrentShortCircuit = null;
         _outputs.Clear();
@@ -121,7 +121,7 @@ public class Simulation
 
             if (component.Blueprint is { Custom: not null, Inputs.Length: 0, Descriptor: not Blueprint.IntrinsicBlueprint.Input })
             {// cant bump components that have no inputs by pushing to work list
-                component.Blueprint.StepStateful(false);
+                component.Blueprint.StepStateful(state, GlobalStateTable.CreateAddress(previousAddressHash, component.Position));
 
                 for (int i = 0; i < component.Blueprint.Outputs.Length; i++)
                 {
@@ -161,7 +161,7 @@ public class Simulation
                 Blueprint.IntrinsicBlueprint.On => PowerState.OnState,
                 Blueprint.IntrinsicBlueprint.Off => PowerState.OffState,
                 Blueprint.IntrinsicBlueprint.Input => blueprint.InputBuffer(component.InputOutputId),
-                Blueprint.IntrinsicBlueprint.Delay => component.Blueprint.DelayValue,
+                Blueprint.IntrinsicBlueprint.Delay => state[GlobalStateTable.CreateAddress(previousAddressHash, component.Position)],
                 Blueprint.IntrinsicBlueprint.Switch => component.Blueprint.SwitchValue,
                 _ => throw new Exception("Not a seed component")
             };
@@ -203,11 +203,26 @@ public class Simulation
                 //    }
                 //    break;
                 case Blueprint.IntrinsicBlueprint.Delay:
-                    // read delay value
+                    // once we hit a delay component, we stop processing further
+                    // the responsibility of updating the input state of delay components is elsewhere
+                    // reading the delay component is done as a seed component
 
-                    PowerState outputDelayValue = component.Blueprint.DelayValue;
+                    //PowerState outputDelayValue = state[GlobalStateTable.CreateAddress(previousAddressHash, component.Position)];
+                    //
+                    //shortCircuit = StartVisit(component.GetOutputPosition(0), tile.ComponentId, outputDelayValue);
+                    break;
+                case Blueprint.IntrinsicBlueprint.FullAdder:
+                    PowerState ia = PowerStateAt(component.GetInputPosition(0));
+                    PowerState ib = PowerStateAt(component.GetInputPosition(1));
+                    PowerState cin = PowerStateAt(component.GetInputPosition(2));
 
-                    shortCircuit = StartVisit(component.GetOutputPosition(0), tile.ComponentId, outputDelayValue);
+                    // sum
+                    shortCircuit = 
+                        StartVisit(component.GetOutputPosition(0), tile.ComponentId, 
+                        (ia.On ^ ib.On ^ cin.On) ? PowerState.OnState : PowerState.OffState);
+                    shortCircuit =
+                        StartVisit(component.GetOutputPosition(1), tile.ComponentId,
+                        ((ia.On && ib.On) || ((ia.On ^ ib.On) && cin.On)) ? PowerState.OnState : PowerState.OffState);
                     break;
                 case Blueprint.IntrinsicBlueprint.Splitter:
                     PowerState powerState = w.State;
@@ -272,7 +287,7 @@ public class Simulation
 
                     component.Blueprint.OutputBufferRaw.AsSpan().Clear();
 
-                    if(component.Blueprint.StepStateful(false) is ShortCircuitDescription pow)
+                    if(component.Blueprint.StepStateful(state, GlobalStateTable.CreateAddress(previousAddressHash, component.Position)) is ShortCircuitDescription pow)
                     {
                         yield return CurrentShortCircuit = new ShortCircuitDescription(tile.ComponentId, -1, default, default, -1, pow);
                         yield break;
@@ -300,7 +315,7 @@ public class Simulation
             }
         }
 
-        // before returning, update inputs of delay components
+        RecordDelayValues(state, previousAddressHash);
 
         ShortCircuitDescription? StartVisit(Point point, int componentId, PowerState state)
         {
@@ -380,44 +395,15 @@ public class Simulation
         }
     }
 
-    public void RecordDelayValues()
+    private void RecordDelayValues(GlobalStateTable state, ulong previousHash)
     {
         foreach (var delayComponentId in _delayComponentIds)
         {
             Component delayComponent = _components[delayComponentId];
-            delayComponent.Blueprint.DelayValue = PowerStateAt(delayComponent.GetInputPosition(0));
-        }
-
-        foreach(var component in _components.AsSpan())
-        {
-            if (!component.Exists)
-                continue;
-
-            if(component.Blueprint.Custom is { } b)
-            {
-                b.RecordDelayValues();
-            }
+            state[GlobalStateTable.CreateAddress(previousHash, delayComponent.Position)] = PowerStateAt(delayComponent.GetInputPosition(0));
         }
     }
 
-    public void ClearAllDelayValues()
-    {
-        foreach(var component in _components.AsSpan())
-        {
-            if (!component.Exists)
-                continue;
-
-            var descript = component.Blueprint.Descriptor;
-            if (descript == Blueprint.IntrinsicBlueprint.Delay)
-            {
-                component.Blueprint.DelayValue = PowerState.OffState;
-            }
-            else if(descript == Blueprint.IntrinsicBlueprint.None)
-            {
-                component.Blueprint.Custom!.ClearAllDelayValues();
-            }
-        }
-    }
     private FastStack<(Point A, Point B, int Id)> _wiresToMove = new(4);
     public bool MoveComponent(int componentId, Point to)
     {
@@ -621,6 +607,7 @@ public class Simulation
         ref var wire = ref _wires.Create(out int id);
         wire.A = w.A;
         wire.B = w.B;
+        wire.WireKind = w.WireKind;
 
         ushort aIndex = checked((ushort)(w.A.X + w.A.Y * Width));
         _wireMap[aIndex].LazyInit().PushRef() = new WireNode() { Id = id, To = w.B };
@@ -670,21 +657,26 @@ public class Simulation
         {
             if (!wire.Exists)
                 continue;
-            var (color, outline) = Constants.GetWireColor(wire.PowerState);
 
-            DrawWire(sb, Scale, wire, color, outline);
+            var (color, outline) = wire.WireKind ?
+                Constants.BundleWireColor :
+                Constants.GetWireColor(wire.PowerState);
+
+            DrawWire(g, Scale, wire, color, outline, wire.WireKind ? wire.PowerState.Values.ToString() : null);
         }
 
         if(CurrentShortCircuit is { WireId: >= 0 })
         {
             Wire w = _wires[CurrentShortCircuit.WireId];
 
-            DrawWire(sb, Scale, w, Color.Yellow, Color.DarkGoldenrod);
+            DrawWire(g, Scale, w, Color.Yellow, Color.DarkGoldenrod);
         }
     }
 
-    public void DrawWire(ShapeBatch sb, float scale, Wire wire, Color color, Color outline)
+    public void DrawWire(Graphics g, float scale, Wire wire, Color color, Color outline, string? text = null)
     {
+        var sb = g.ShapeBatch;
+
         var b = wire.B.ToVector2() * scale;
         var a = wire.A.ToVector2() * scale;
 
@@ -693,6 +685,12 @@ public class Simulation
         
         Node(wire.A, a);
         Node(wire.B, b);
+
+        if(text is not null)
+        {
+            var center = (a + b) * 0.5f;
+            g.DrawStringCentered(text, center);
+        }
 
         void Node(Point point, Vector2 a)
         {
