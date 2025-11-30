@@ -24,7 +24,7 @@ public partial class MainSimulation : IScreen
 
     private Point? _dragStartWorld;
 
-    private ShortCircuitDescription? _shortCircuitErr;
+    private ErrDescription? _shortCircuitErr;
 
     private enum SimDragReason : byte { PlaceWire, MoveComponent }
     private SimDragReason _simDragReason;
@@ -52,7 +52,7 @@ public partial class MainSimulation : IScreen
 
     private int _rotation;
 
-    private IEnumerator<ShortCircuitDescription?>? _state;
+    private IEnumerator<ErrDescription?>? _state;
     private ComponentEntry? _componentToPlace;
 
     public MainSimulation(Camera2D camera, Graphics graphics, ScreenManager screenManager)

@@ -32,6 +32,8 @@ internal class Sandbox : Campaign
         Blueprint.Switch,
         Blueprint.FullAdder,
         Blueprint.Delay,
+        Blueprint.DEC8,
+        Blueprint.RAM,
     ];
 
     public Sandbox(ServiceContainer serviceContainer, CampaignState campaignState, Graphics graphics, EditorUI editorUI, SimInteraction simInteraction) : base(nameof(Sandbox), serviceContainer, graphics, editorUI, simInteraction)

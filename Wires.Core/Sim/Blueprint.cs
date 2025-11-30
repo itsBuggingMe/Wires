@@ -140,14 +140,14 @@ public class Blueprint
 
     public Blueprint Clone(int rotation) => new Blueprint(_data, rotation);
 
-    public ShortCircuitDescription? Reset(GlobalStateTable globalStateTable, ulong previousHash)
+    public ErrDescription? Reset(GlobalStateTable globalStateTable, ulong previousHash)
     {
         if (Custom is null)
             return null;
         return StepStateful(globalStateTable, previousHash);
     }
 
-    public ShortCircuitDescription? SimulateTick(GlobalStateTable globalStateTable)
+    public ErrDescription? SimulateTick(GlobalStateTable globalStateTable)
     {
         var s = StepStateful(globalStateTable, 92821);
 
@@ -156,16 +156,20 @@ public class Blueprint
         return s;
     }
 
-    public ShortCircuitDescription? StepStateful(GlobalStateTable stateTable, ulong previousHash)
+    public ErrDescription? StepStateful(GlobalStateTable stateTable, ulong previousHash)
     {
         if (Custom is null)
             return null;
 
-        var enumerator = Custom.StepEnumerator(this, stateTable, previousHash).GetEnumerator();
-        while (enumerator.MoveNext())
+        const int MaxIterations = 10_000;
+
+        int iter = 0;
+        foreach(var e in Custom.StepEnumerator(this, stateTable, previousHash))
         {
-            if(enumerator.Current is ShortCircuitDescription err)
+            if (e is ErrDescription err)
                 return err;
+            if(iter > MaxIterations)
+                return new ErrDescription(-1, -1, default, default, -1, null, true);
         }
 
         return null;
@@ -395,6 +399,44 @@ public class Blueprint
             (new Point(1, 1), TileKind.Output),
         ], "ADD1", IntrinsicBlueprint.FullAdder);
 
+    public static readonly Blueprint DEC8 = new([
+            (new Point(0, -4), TileKind.Component),
+            (new Point(0, -3), TileKind.Component),
+            (new Point(0, -2), TileKind.Component),
+            (new Point(0, -1), TileKind.Component),
+            (new Point(0, 0), TileKind.Component),
+            (new Point(0, 1), TileKind.Component),
+            (new Point(0, 2), TileKind.Component),
+            (new Point(0, 3), TileKind.Component),
+            (new Point(-1, -4), TileKind.Input),
+            (new Point(-1, -3), TileKind.Input),
+            (new Point(-1, -2), TileKind.Input),
+            (new Point(1, -4), TileKind.Output),
+            (new Point(1, -3), TileKind.Output),
+            (new Point(1, -2), TileKind.Output),
+            (new Point(1, -1), TileKind.Output),
+            (new Point(1, 0), TileKind.Output),
+            (new Point(1, 1), TileKind.Output),
+            (new Point(1, 2), TileKind.Output),
+            (new Point(1, 3), TileKind.Output),
+        ], nameof(DEC8), IntrinsicBlueprint.DEC8);
+
+    public static readonly Blueprint RAM = new([
+            (new Point(-1, -1), TileKind.Component),
+            (new Point(+0, -1), TileKind.Component),
+            (new Point(+1, -1), TileKind.Component),
+            (new Point(-1, +0), TileKind.Component),
+            (new Point(+0, +0), TileKind.Component),
+            (new Point(+1, +0), TileKind.Component),
+            (new Point(-1, +1), TileKind.Component),
+            (new Point(+0, +1), TileKind.Component),
+            (new Point(+1, +1), TileKind.Component),
+            (new Point(0, -2), TileKind.Input),
+            (new Point(-2, -1), TileKind.Input),
+            (new Point(-2, 0), TileKind.Input),
+            (new Point(2, -1), TileKind.Output),
+        ], nameof(RAM), IntrinsicBlueprint.RAM);
+
     public enum IntrinsicBlueprint
     {
         None,
@@ -419,5 +461,7 @@ public class Blueprint
         XNOR,
 
         FullAdder,
+        DEC8,
+        RAM,
     }
 }

@@ -1,16 +1,22 @@
-﻿using System;
+﻿using Apos.Shapes;
+using Frent.Core;
 using Microsoft.Xna.Framework;
-using Wires.Core;
-using Apos.Shapes;
-using System.Collections.Generic;
-using System.Diagnostics;
 using Paper.Core;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using Wires.Core;
 
 namespace Wires.Core.Sim;
 
 public class Simulation
 {
-    public ShortCircuitDescription? CurrentShortCircuit { get; private set; }
+    public ErrDescription? CurrentShortCircuit { get; private set; }
 
     private readonly Tile[] _tiles;
 
@@ -60,6 +66,21 @@ public class Simulation
         }
     }
 
+    public IEnumerable<int> ComponentIds
+    {
+        get
+        {
+            for (int i = 0; i < _components.Max; i++)
+            {
+                var c = _components[i];
+                if (c.Exists)
+                {
+                    yield return i;
+                }
+            }
+        }
+    }
+
     public IEnumerable<Wire> Wires
     {
         get
@@ -70,6 +91,21 @@ public class Simulation
                 if (c.Exists)
                 {
                     yield return c;
+                }
+            }
+        }
+    }
+
+    public IEnumerable<int> WireIds
+    {
+        get
+        {
+            for (int i = 0; i < _wires.Max; i++)
+            {
+                var c = _wires[i];
+                if (c.Exists)
+                {
+                    yield return i;
                 }
             }
         }
@@ -99,7 +135,9 @@ public class Simulation
         }
     }
 
-    public IEnumerable<ShortCircuitDescription?> StepEnumerator(Blueprint blueprint, GlobalStateTable state, ulong previousAddressHash)
+    private const int MaxIterationCount = 10_000;
+
+    public IEnumerable<ErrDescription?> StepEnumerator(Blueprint blueprint, GlobalStateTable state, ulong previousAddressHash)
     {
         CurrentShortCircuit = null;
         _outputs.Clear();
@@ -130,7 +168,7 @@ public class Simulation
 
                     if(StartVisit(component.GetOutputPosition(i), id, power) is { } err)
                     {
-                        yield return CurrentShortCircuit = new ShortCircuitDescription(id, -1, default, default, -1, err);
+                        yield return CurrentShortCircuit = new ErrDescription(id, -1, default, default, -1, err);
                         yield break;
                     }
                 }
@@ -179,7 +217,7 @@ public class Simulation
             Tile tile = this[w.Position];
             ref Component component = ref _components[tile.ComponentId];
 
-            ShortCircuitDescription? shortCircuit = null;
+            ErrDescription? shortCircuit = null;
             switch (component.Blueprint.Descriptor)
             {
                 case Blueprint.IntrinsicBlueprint.Output:
@@ -249,6 +287,13 @@ public class Simulation
 
                     shortCircuit = StartVisit(component.GetOutputPosition(0), tile.ComponentId, outputState);
                     break;
+                case Blueprint.IntrinsicBlueprint.RAM:
+                    var output = state.TickRam(
+                        PowerStateAt(component.GetInputPosition(0)),
+                        PowerStateAt(component.GetInputPosition(1)),
+                        PowerStateAt(component.GetInputPosition(2)));
+                    shortCircuit = StartVisit(component.GetOutputPosition(0), tile.ComponentId, output);
+                    break;
                 case Blueprint.IntrinsicBlueprint.AND:
                 case Blueprint.IntrinsicBlueprint.NAND:
                 case Blueprint.IntrinsicBlueprint.OR:
@@ -275,6 +320,17 @@ public class Simulation
                     PowerState a1 = PowerStateAt(component.GetInputPosition(0));
                     shortCircuit = StartVisit(component.GetOutputPosition(0), tile.ComponentId, a1.On ? PowerState.OffState : PowerState.OnState);
                     break;
+                case Blueprint.IntrinsicBlueprint.DEC8:
+                    int index = 
+                        (PowerStateAt(component.GetInputPosition(0)).On ? 0b001 : 0) |
+                        (PowerStateAt(component.GetInputPosition(1)).On ? 0b010 : 0) |
+                        (PowerStateAt(component.GetInputPosition(2)).On ? 0b100 : 0);
+
+                    for(int i = 0; i < 8; i++)
+                    {
+                        shortCircuit = StartVisit(component.GetOutputPosition(i), tile.ComponentId, index == i ? PowerState.OnState : PowerState.OffState);
+                    }
+                    break;
                 case Blueprint.IntrinsicBlueprint.Disp:
                     // nothing
                     break;
@@ -287,9 +343,9 @@ public class Simulation
 
                     component.Blueprint.OutputBufferRaw.AsSpan().Clear();
 
-                    if(component.Blueprint.StepStateful(state, GlobalStateTable.CreateAddress(previousAddressHash, component.Position)) is ShortCircuitDescription pow)
+                    if(component.Blueprint.StepStateful(state, GlobalStateTable.CreateAddress(previousAddressHash, component.Position)) is ErrDescription pow)
                     {
-                        yield return CurrentShortCircuit = new ShortCircuitDescription(tile.ComponentId, -1, default, default, -1, pow);
+                        yield return CurrentShortCircuit = new ErrDescription(tile.ComponentId, -1, default, default, -1, pow);
                         yield break;
                     }
 
@@ -304,7 +360,7 @@ public class Simulation
                 default: throw new NotImplementedException();
             }
 
-            if(shortCircuit is ShortCircuitDescription err)
+            if(shortCircuit is ErrDescription err)
             {
                 yield return CurrentShortCircuit = err;
                 yield break;
@@ -317,20 +373,20 @@ public class Simulation
 
         RecordDelayValues(state, previousAddressHash);
 
-        ShortCircuitDescription? StartVisit(Point point, int componentId, PowerState state)
+        ErrDescription? StartVisit(Point point, int componentId, PowerState state)
         {
             _outputs[point] = state;
 
             foreach (WireNode connection in WiresAt(point))
             {
-                if (VisitWire(connection, componentId, state) is ShortCircuitDescription shortCircuitDescription)
-                    return shortCircuitDescription;
+                if (VisitWire(connection, componentId, state) is ErrDescription ErrDescription)
+                    return ErrDescription;
             }
 
             return null;    
         }
 
-        ShortCircuitDescription? VisitWire(WireNode wireNode, int componentId, PowerState state)
+        ErrDescription? VisitWire(WireNode wireNode, int componentId, PowerState state)
         {
             ref Wire wire = ref _wires[wireNode.Id];
 
@@ -338,7 +394,7 @@ public class Simulation
                 return null;
 
             if (wire.PowerState != state && wire.LastVisitComponentId != -1 && wire.LastVisitComponentId != componentId)
-                return new ShortCircuitDescription(componentId, wire.LastVisitComponentId, state, wire.PowerState, wireNode.Id);
+                return new ErrDescription(componentId, wire.LastVisitComponentId, state, wire.PowerState, wireNode.Id);
 
             wire.LastVisitComponentId = componentId;
             wire.PowerState = state;
@@ -360,13 +416,13 @@ public class Simulation
                             continue;
                     }
                     else if (connectedWire.PowerState != state)
-                        return CurrentShortCircuit = new ShortCircuitDescription(connectedWire.LastVisitComponentId, componentId, connectedWire.PowerState, state, wireNode.Id);
+                        return CurrentShortCircuit = new ErrDescription(connectedWire.LastVisitComponentId, componentId, connectedWire.PowerState, state, wireNode.Id);
                 }
 
                 connectedWire.PowerState = state;
 
                 // copy power state to other wires
-                if(VisitWire(connection, componentId, state) is ShortCircuitDescription err)
+                if(VisitWire(connection, componentId, state) is ErrDescription err)
                 {
                     return err;
                 }
@@ -379,7 +435,7 @@ public class Simulation
         {
             foreach(var wireNode in WiresAt(connection))
             {
-                Wire wire = _wires[wireNode.Id];
+                ref Wire wire = ref _wires[wireNode.Id];
                 if (wire.LastVisitComponentId == -2)
                     continue;// mark visited with -2
                 wire.LastVisitComponentId = -2;
@@ -405,45 +461,21 @@ public class Simulation
     }
 
     private FastStack<(Point A, Point B, int Id)> _wiresToMove = new(4);
+
     public bool MoveComponent(int componentId, Point to)
     {
+
+        if (!CanMoveComponent(componentId, to))
+            return false;
+
+        MoveComponentCore(componentId, to);
+
+        return true;
+    }
+
+    private void MoveComponentCore(int componentId, Point to)
+    {
         ref Component component = ref _components[componentId];
-
-        if (component.Position == to)
-            return true;
-
-        Point delta = to - component.Position;
-
-        foreach(var element in component.Blueprint.Display)
-        {
-            Point destPos = element.Offset + to;
-            if(!InRange(destPos) || (this[destPos] is { Kind: not TileKind.Nothing } dest && dest.ComponentId != componentId))
-            {
-                return false;
-            }
-        }
-
-        //foreach(var element in component.Blueprint.Display)
-        //{
-        //    if(element.Kind is TileKind.Output or TileKind.Input)
-        //    {
-        //        Point oldWirePos = component.Position + element.Offset;
-        //        // all separate to avoid messing up the data structures
-        //        foreach(var node in WiresAt(oldWirePos))
-        //        {
-        //            _wiresToMove.PushRef() = (node.To, oldWirePos + delta, node.Id);
-        //        }
-        //    }
-        //}
-        //
-        //foreach (var wire in _wiresToMove.AsSpan())
-        //{
-        //    DestroyWire(wire.Id);
-        //}
-        //while (_wiresToMove.TryPop(out var x))
-        //{
-        //    CreateWire(new Wire(x.A, x.B));
-        //}
 
         foreach (var element in component.Blueprint.Display)
         {
@@ -458,8 +490,6 @@ public class Simulation
         }
 
         component.Position = to;
-
-        return true;
     }
 
     public ref Wire Wire(int id) => ref _wires[id];
@@ -557,6 +587,7 @@ public class Simulation
     public void DestroyWire(int wireId)
     {
         Wire w = _wires[wireId];
+
         _wires.Destroy(wireId);
 
         ushort aIndex = checked((ushort)(w.A.X + w.A.Y * Width));
@@ -599,11 +630,109 @@ public class Simulation
         return (uint)pos.X < (uint)Width && (uint)pos.Y < (uint)Height;
     }
 
+    private bool CanMoveComponent(int componentId, Point to, List<int>? exemptCollisons = null)
+    {
+        ref Component component = ref _components[componentId];
+
+        if (!component.Exists)
+            return false;
+        if (component.Position == to)
+            return true;
+
+        foreach (var element in component.Blueprint.Display)
+        {
+            Point destPos = element.Offset + to;
+            if (!InRange(destPos) || (
+                this[destPos] is { Kind: not TileKind.Nothing } dest &&
+                dest.ComponentId != componentId &&
+                (!exemptCollisons?.Contains(componentId) ?? true))
+                )
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public void MoveMany(List<int> componentIds, List<(int id, bool side)> wireIds, Point delta)
+    {
+        foreach(var (wireId, side) in wireIds)
+        {
+            if (!CanMoveWireNode(wireId, side, delta))
+                return;
+        }
+
+        foreach(var componentId in componentIds)
+        {
+            if(!CanMoveComponent(componentId, _components[componentId].Position + delta, componentIds))
+                return;
+        }
+
+
+        foreach (var (wireId, side) in wireIds)
+        {
+            MoveWireNode(wireId, side, delta);
+        }
+
+        foreach (var componentId in componentIds)
+        {
+            MoveComponentCore(componentId, _components[componentId].Position + delta);
+        }
+
+        bool CanMoveWireNode(int wireId, bool side, Point delta)
+        {
+            ref Wire wire = ref _wires[wireId];
+
+            if (!wire.Exists)
+                return false;
+
+            ref Point pointToMove = ref side ? ref wire.A : ref wire.B;
+
+
+            Point destination = pointToMove + delta;
+
+            if (!InRange(destination))
+                return false;
+
+            Point otherSide = side ? wire.B : wire.A;
+
+            if (pointToMove == destination)
+                return false;
+            if (destination == otherSide && !wireIds.Any(w => w.id == wireId && w.side != side))
+                return false;
+            if (this[destination].Kind is TileKind.Component &&
+                !componentIds.Contains(this[destination].ComponentId))
+                return false;
+
+            return true;
+        }
+
+        bool MoveWireNode(int wireId, bool side, Point delta)
+        {
+            ref Wire wire = ref _wires[wireId];
+            ref Point pointToMove = ref side ? ref wire.A : ref wire.B;
+            Point destination = pointToMove + delta;
+            Point otherSide = side ? wire.B : wire.A;
+
+            ushort oldIndex = checked((ushort)(pointToMove.X + pointToMove.Y * Width));
+            _wireMap[oldIndex].LazyInit().Remove(new WireNode() { Id = wireId, To = otherSide });
+            ushort newIndex = checked((ushort)(destination.X + destination.Y * Width));
+            _wireMap[newIndex].LazyInit().PushRef() = new WireNode() { Id = wireId, To = otherSide };
+            pointToMove = destination;
+
+            return true;
+        }
+    }
+
     public int CreateWire(Wire w)
     {
         if (w.A == w.B)
-            return default;
-
+            return -1;
+        if (!InRange(w.A) || !InRange(w.B))
+            return -1;
+        if (this[w.A] is { Kind: TileKind.Component } || this[w.B] is { Kind: TileKind.Component })
+            return -1;
         ref var wire = ref _wires.Create(out int id);
         wire.A = w.A;
         wire.B = w.B;

@@ -78,7 +78,8 @@ internal static class Levels
         FileUtils.OnCookieLoad = onLoad;
         JSRuntimeInstance.InvokeAsync<string>("getStorage", "save");
 #else
-        onLoad(File.Exists(PathBinary) ? File.ReadAllText(PathBinary) : string.Empty);
+        if(File.Exists(PathBinary))
+            onLoad(File.ReadAllText(PathBinary));
 #endif
     }
 

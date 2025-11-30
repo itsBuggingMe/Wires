@@ -18,7 +18,7 @@ public struct Wire(Point a, Point b) : IFreeListId
     public bool Exists = true;
 
     public int FreeNext { get => A.X; set => A.X = value; }
-    bool IFreeListId.Exists { set => Exists = value; }
+    bool IFreeListId.Exists { get => Exists;  set => Exists = value; }
     public int LastVisitComponentId;
 }
 

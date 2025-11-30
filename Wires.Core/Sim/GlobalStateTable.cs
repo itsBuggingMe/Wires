@@ -15,7 +15,9 @@ public class GlobalStateTable
 
     private Dictionary<ulong, PowerState> _addressMapWrite = [];
     private Dictionary<ulong, PowerState> _addressMapRead = [];
-
+    private readonly byte[] _readMemory = new byte[256];
+    private readonly byte[] _writeMemory = new byte[256];
+    private readonly Stack<byte> _writtenAddresses = [];
 
     public static ulong CreateAddress(ulong previousAddress, Point pos)
     {
@@ -29,9 +31,25 @@ public class GlobalStateTable
         return newAddress;
     }
 
+    public PowerState TickRam(PowerState enableWrite, PowerState writeValue, PowerState address)
+    {
+        if(enableWrite.On)
+        {
+            _writtenAddresses.Push(address.Values);
+            _writeMemory[address.Values] = writeValue.Values;
+        }
+
+        return new(_readMemory[address.Values]);
+    }
+
     public void SwapBuffers()
     {
         (_addressMapRead, _addressMapWrite) = (_addressMapWrite, _addressMapRead);
+
+        while(_writtenAddresses.TryPop(out byte i))
+        {
+            _readMemory[i] = _writeMemory[i];
+        }
     }
 
     public void Reset()

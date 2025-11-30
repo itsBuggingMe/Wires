@@ -23,7 +23,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Sim\TruthTableData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Saving\Levels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Saving\Models.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Sim\ShortCircuitDescription.cs" />
+    <Compile Include="..\Wires.Core\Sim\ErrDescription.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\SimInteraction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Simulation.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Structs.cs" />
