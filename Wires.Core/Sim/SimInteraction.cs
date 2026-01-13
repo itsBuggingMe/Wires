@@ -1,4 +1,5 @@
-﻿using Microsoft.Xna.Framework;
+﻿using Frent;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 using Paper.Core;
 using System;
@@ -9,6 +10,8 @@ using System.Runtime.Serialization;
 using System.Security.AccessControl;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using Wires.Core.Components.Stateful;
+using Wires.Core.Sim.Components;
 
 namespace Wires.Core.Sim;
 
@@ -16,7 +19,7 @@ internal class SimInteraction
 {
     private ComponentEntry? _activeDragDrop;
     private int _rotation;
-    private int? _draggedComponentId;
+    private Entity _draggedComponentId;
     private Point? _wireDragStart;
     private bool _currentPlacedIsBundle = true;
     private Point _wireDragCurrent;
@@ -29,7 +32,7 @@ internal class SimInteraction
     private Point? _selectionDragPrev;
     private SelectionCopyData? _selectionCopied;
 
-    public ErrDescription? ErrDescription { get; private set; }
+    public TickResult? TickResult { get; private set; }
 
     public ComponentEntry? ActiveEntry
     { 
@@ -75,9 +78,10 @@ internal class SimInteraction
             {
                 foreach (var component in sim.Components)
                 {
-                    if (component.Position == tileOver && component is { Blueprint.Descriptor: Blueprint.IntrinsicBlueprint.Switch })
+                    // TODO: refactor into system
+                    if (component.Get<ComponentData>().Position == tileOver && component.Get<ComponentData>() is { Blueprint.Descriptor: Blueprint.IntrinsicBlueprint.Switch })
                     {
-                        component.Blueprint.SwitchValue = component.Blueprint.SwitchValue.On ? PowerState.OffState : PowerState.OnState;
+                        component.Get<ComponentData>().Blueprint.SwitchValue = component.Get<ComponentData>().Blueprint.SwitchValue.On ? PowerState.OffState : PowerState.OnState;
                         Step();
                         return;
                     }
@@ -108,52 +112,6 @@ internal class SimInteraction
                 return;
             }
 
-            // moving selections
-            // handle before wires
-            if (_groupSelection is { } selection && InputHelper.RisingEdge(MouseButton.Left) && _selectionDragPrev is null)
-            {
-                foreach(var componentId in selection.Components)
-                {
-                    ref Component component = ref sim.GetComponent(componentId);
-                    foreach(var offset in component.Blueprint.Display)
-                    {
-                        if((component.Position + offset.Offset) == tileOver)
-                        {
-                            _selectionDragPrev = tileOver;
-                            return;
-                        }
-                    }
-                }
-
-                foreach (var (wireId, side) in selection.WireNodes)
-                {
-                    ref Wire w = ref ActiveSim.Wire(wireId);
-                    Point pos = side ? w.A : w.B;
-
-                    if(pos == tileOver)
-                    {
-                        _selectionDragPrev = tileOver;
-                        return;
-                    }
-                }
-            }
-
-            if(_selectionDragPrev is Point p && _groupSelection is GroupSelection se)
-            {
-                if (!MouseButton.Left.Down())
-                {
-                    _selectionDragPrev = null;
-                    return;
-                }
-
-                Point delta = tileOver - p;
-                _selectionDragPrev = tileOver;
-                if(delta != default)
-                    sim.MoveMany(se.Components, se.WireNodes, delta);
-
-                return;
-            }
-
             // placing wires
             if ((InputHelper.RisingEdge(MouseButton.Left) || InputHelper.RisingEdge(MouseButton.Right)) && sim.InRange(tileOver) && (sim[tileOver] is { Kind: TileKind.Input or TileKind.Output } || sim.HasWiresAt(tileOver)))
             {
@@ -173,7 +131,7 @@ internal class SimInteraction
                 if (!sim.InRange(_wireDragStart.Value) || !sim.InRange(_wireDragCurrent))
                     return;
 
-                sim.CreateWire(new Wire { A = _wireDragStart.Value, B = _wireDragCurrent, WireKind = _currentPlacedIsBundle });
+                sim.CreateWire(new Wire(_wireDragStart.Value, _wireDragCurrent, _currentPlacedIsBundle ? WireKind.Byte : WireKind.Bit));
                 _wireDragStart = null;
                 Step();
                 return;
@@ -183,31 +141,31 @@ internal class SimInteraction
             if (MouseButton.Left.RisingEdge() && sim.InRange(tileOver) &&
                 (sim[tileOver].Kind is TileKind.Output or TileKind.Input or TileKind.Component))
             {
-                _draggedComponentId = sim[tileOver].ComponentId;
+                _draggedComponentId = sim[tileOver].Meta;
                 return;
             }
 
-            if (_draggedComponentId is int draggedComponentId && sim.InRange(tileOver) && !sim.HasWiresAt(tileOver))
+            if (_draggedComponentId.IsAlive && sim.InRange(tileOver) && !sim.HasWiresAt(tileOver))
             {
-                sim.MoveComponent(draggedComponentId, tileOver);
+                sim.MoveComponent(_draggedComponentId, tileOver);
                 Step();
                 if (!InputHelper.Down(MouseButton.Left))
                 {
-                    _draggedComponentId = null;
+                    _draggedComponentId = Entity.Null;
                 }
                 return;
             }
 
             if (MouseButton.Right.FallingEdge() && _activeDragDrop is null && sim.InRange(tileOver))
             {
-                if (sim.IdOfWireAt(tileOver) is int id)
+                if (sim.IdOfWireAt(tileOver) is { IsAlive: true } wire)
                 {
-                    sim.DestroyWire(id);
+                    wire.Delete();
                     Step();
                 }
                 else if (sim[tileOver].Kind is not TileKind.Nothing)
                 {
-                    sim.DestroyComponent(tileOver);
+                    sim[tileOver].Meta.Delete();
                     Step();
                 }
                 return;
@@ -232,16 +190,16 @@ internal class SimInteraction
                     _selectRectangle = null;
                     _groupSelection = new GroupSelection();
 
-                    foreach (var id in sim.ComponentIds)
+                    foreach (var id in sim.Components)
                     {
-                        ref Component component = ref sim.GetComponent(id);
+                        ref ComponentData component = ref id.Get<ComponentData>();
                         if(bounds.Contains(component.Position))
                             _groupSelection.Components.Add(id);
                     }
 
-                    foreach (var wireId in sim.WireIds)
+                    foreach (var wireId in sim.Wires)
                     {
-                        ref Wire wire = ref sim.Wire(wireId);
+                        ref Wire wire = ref wireId.Get<Wire>();
                         if (bounds.Contains(wire.A))
                             _groupSelection.WireNodes.Add((wireId, true));
                         if (bounds.Contains(wire.B))
@@ -260,7 +218,7 @@ internal class SimInteraction
 
                 foreach (var id in _groupSelection.Components)
                 {
-                    ref Component component = ref sim.GetComponent(id);
+                    ref ComponentData component = ref id.Get<ComponentData>();
                     min = new Point(int.Min(min.X, component.Position.X), int.Min(min.Y, component.Position.Y));
                     max = new Point(int.Max(max.X, component.Position.X), int.Max(max.Y, component.Position.Y));
 
@@ -269,7 +227,7 @@ internal class SimInteraction
 
                 foreach (var (wireId, _) in _groupSelection.WireNodes)
                 {
-                    ref Wire wire = ref sim.Wire(wireId);
+                    ref Wire wire = ref wireId.Get<Wire>();
 
                     min = new Point(int.Min(min.X, int.Min(wire.A.X, wire.B.X)), int.Min(min.Y, int.Min(wire.A.Y, wire.B.Y)));
                     max = new Point(int.Max(max.X, int.Max(wire.A.X, wire.B.X)), int.Max(max.Y, int.Max(wire.A.Y, wire.B.Y)));
@@ -285,12 +243,12 @@ internal class SimInteraction
             {
                 foreach (var id in _groupSelection.Components)
                 {
-                    sim.DestroyComponent(sim.GetComponent(id).Position);
+                    id.Delete();
                 }
 
                 foreach (var (wireId, _) in _groupSelection.WireNodes)
                 {
-                    sim.DestroyWire(wireId);
+                    wireId.Delete();
                 }
 
                 _groupSelection = null;
@@ -300,8 +258,8 @@ internal class SimInteraction
 
             if ((Keys.LeftControl.Down() || Keys.RightControl.Down()) && Keys.V.RisingEdge() && _selectionCopied is not null)
             {
-                List<int> compIds = [];
-                List<int> wireIds = [];
+                List<Entity> compIds = [];
+                List<Entity> wireIds = [];
 
                 foreach ((Blueprint blueprint, Point position, int rotation) in _selectionCopied.Components)
                 {
@@ -319,11 +277,11 @@ internal class SimInteraction
 
                 _groupSelection = new GroupSelection()
                 {
-                    Components = compIds.Where(w => w != -1).ToList(),
-                    WireNodes = wireIds.Where(w => w != -1).SelectMany(id =>
+                    Components = compIds.Where(w => w.IsAlive).ToList(),
+                    WireNodes = wireIds.Where(w => w.IsAlive).SelectMany(id =>
                     {
-                        ref Wire wire = ref sim.Wire(id);
-                        return ((int, bool)[])[(id, true), (id, false)];
+                        ref Wire wire = ref id.Get<Wire>();
+                        return ((Entity, bool)[])[(id, true), (id, false)];
                     }).ToList(),
                 };
             }
@@ -344,7 +302,7 @@ internal class SimInteraction
     {
         _groupSelection = null;
         _globalStateTable.Reset();
-        ErrDescription = ActiveEntry?.Blueprint.SimulateTick(_globalStateTable);
+        TickResult = ActiveEntry?.Blueprint.SimulateTick(_globalStateTable);
     }
 
     public void UpdateCamera()
@@ -357,7 +315,7 @@ internal class SimInteraction
         if (Keys.OemMinus.RisingEdge())
             _camera.Scale /= ScrollScaleM;
 
-        if (MouseButton.Left.Down() && _draggedComponentId is null && _wireDragStart is null && _activeDragDrop is null && _selectRectangle is null && _selectionDragPrev is null)
+        if (MouseButton.Left.Down() && _draggedComponentId.IsNull && _wireDragStart is null && _activeDragDrop is null && _selectRectangle is null && _selectionDragPrev is null)
             _camera.Position -= (InputHelper.PrevMouseState.Position.ToVector2() - InputHelper.MouseLocation.ToVector2()) / _camera.Scale;
     }
 
@@ -390,7 +348,7 @@ internal class SimInteraction
             var colors = _currentPlacedIsBundle ?
                 Constants.BundleWireColor :
                 Constants.GetWireColor(PowerState.OffState);
-            ActiveSim.DrawWire(_graphics, Constants.Scale, new Wire(dragStart, _wireDragCurrent), colors.Color * 0.5f, colors.Output * 0.5f);
+            ActiveSim.DrawWire(_graphics, Constants.Scale, new Wire(dragStart, _wireDragCurrent, default), colors.Color * 0.5f, colors.Output * 0.5f);
         }
 
         if(_selectRectangle is Rectangle bound)
@@ -404,14 +362,14 @@ internal class SimInteraction
         {
             foreach(var componentId in selection.Components)
             {
-                Point pos = ActiveSim.GetComponent(componentId).Position;
+                Point pos = componentId.Get<ComponentData>().Position;
 
                 _graphics.ShapeBatch.DrawCircle(pos.ToVector2() * Constants.Scale, 40, Color.Transparent, Color.White * 0.5f, 2);
             }
 
             foreach(var (wireId, side) in selection.WireNodes)
             {
-                ref Wire w = ref ActiveSim.Wire(wireId);
+                ref Wire w = ref wireId.Get<Wire>();
                 Point pos = side ? w.A : w.B;
 
                 _graphics.ShapeBatch.DrawCircle(pos.ToVector2() * Constants.Scale, 20, Color.Transparent, Color.LightBlue * 0.5f, 2);
@@ -430,8 +388,8 @@ internal class SimInteraction
     }
     private class GroupSelection
     {
-        public List<int> Components { get; set; } = [];
-        public List<(int Id, bool IsA)> WireNodes { get; set; } = [];
+        public List<Entity> Components { get; set; } = [];
+        public List<(Entity Id, bool IsA)> WireNodes { get; set; } = [];
     }
 
     private class SelectionCopyData

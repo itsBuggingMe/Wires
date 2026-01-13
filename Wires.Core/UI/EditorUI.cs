@@ -257,6 +257,8 @@ internal class EditorUI : RootUI<Graphics>
 
     public override bool Update()
     {
+        // TODO implement proper ss logic
+        /*
         if(_ssTooltip is null && Interaction.ActiveSim is { CurrentShortCircuit: { } ss })
         {
             _ssTooltip = new ShortCircuitTooltip(default, Interaction.ActiveSim, ss);
@@ -267,7 +269,7 @@ internal class EditorUI : RootUI<Graphics>
         {
             RemoveChild(_ssTooltip);
             _ssTooltip = null;
-        }
+        }*/
 
         return base.Update();
     }

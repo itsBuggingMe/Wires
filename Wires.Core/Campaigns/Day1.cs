@@ -1,12 +1,14 @@
-﻿using Microsoft.VisualBasic;
+﻿using Frent;
+using Microsoft.VisualBasic;
 using Microsoft.Xna.Framework;
 using Paper.Core;
 using Paper.Core.UI;
 using System;
-using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using Wires.Core.Components.Stateful;
 using Wires.Core.Sim;
 using Wires.Core.Sim.Saving;
 using Wires.Core.UI;
@@ -41,7 +43,7 @@ internal class Day1 : Campaign
         var level2 = new Simulation(9, 9);
 
         level2.Place(Blueprint.Output, new(8, 4), 0, false);
-        int switchInput2 = level2.Place(Blueprint.Switch, new(0, 4), 0, false);
+        Entity switchInput2 = level2.Place(Blueprint.Switch, new(0, 4), 0, false);
         level2.Place(Blueprint.NOT, new(4, 4), 0, false);
 
         Blueprint level2Blueprint;
@@ -52,7 +54,7 @@ internal class Day1 : Campaign
 
         while (seenStates.Count < 2)
         {
-            ref Component @switch = ref level2.GetComponent(switchInput2);
+            ref ComponentData @switch = ref switchInput2.Get<ComponentData>();
             PowerState oldPowerState = @switch.Blueprint.SwitchValue;
 
             PowerState TestOutputPower(PowerState input, Blueprint b)
@@ -79,8 +81,8 @@ internal class Day1 : Campaign
         var level3 = new Simulation(9, 9);
 
         level3.Place(Blueprint.Output, new(8, 4), 0, false);
-        int switchInput3_1 = level3.Place(Blueprint.Switch, new(0, 2), 0, false);
-        int switchInput3_2 = level3.Place(Blueprint.Switch, new(0, 6), 0, false);
+        Entity switchInput3_1 = level3.Place(Blueprint.Switch, new(0, 2), 0, false);
+        Entity switchInput3_2 = level3.Place(Blueprint.Switch, new(0, 6), 0, false);
         level3.Place(Blueprint.AND, new(4, 4), 0, false);
 
         Blueprint level3Blueprint;
@@ -99,13 +101,13 @@ internal class Day1 : Campaign
                 ],
                 [PowerState.OffState, PowerState.OffState, PowerState.OffState, PowerState.OnState], level3Blueprint))
             {
-                seenStates3.Add((level3.GetComponent(switchInput3_1).Blueprint.SwitchValue,
-                    level3.GetComponent(switchInput3_2).Blueprint.SwitchValue));
+                seenStates3.Add((switchInput3_1.Get<ComponentData>().Blueprint.SwitchValue,
+                    switchInput3_2.Get<ComponentData>().Blueprint.SwitchValue));
             }
             yield return null;
         }
 
-        bool TestSim(Span<(int ComponentId, PowerState State)[]> inputs, PowerState[] expected, Blueprint blueprint)
+        bool TestSim(Span<(Entity ComponentId, PowerState State)[]> inputs, PowerState[] expected, Blueprint blueprint)
         {
             if (blueprint.Custom is null)
                 return false;
@@ -113,7 +115,7 @@ internal class Day1 : Campaign
             Span<PowerState> oldStates = stackalloc PowerState[inputs.Length];
             int index = 0;
             foreach (var componentId in inputs[0])
-                oldStates[index++] = blueprint.Custom.GetComponent(componentId.ComponentId).Blueprint.SwitchValue;
+                oldStates[index++] = componentId.ComponentId.Get<ComponentData>().Blueprint.SwitchValue;
 
             index = 0;
             bool result = true;
@@ -121,7 +123,7 @@ internal class Day1 : Campaign
             {
                 foreach (var (id, state) in t)
                 {
-                    blueprint.Custom.GetComponent(id).Blueprint.SwitchValue = state;
+                    id.Get<ComponentData>().Blueprint.SwitchValue = state;
                 }
 
                 blueprint.SimulateTick(StateTable);
@@ -135,7 +137,7 @@ internal class Day1 : Campaign
 
             index = 0;
             foreach (var componentId in inputs[0])
-                blueprint.Custom.GetComponent(componentId.ComponentId).Blueprint.SwitchValue = oldStates[index++];
+                componentId.ComponentId.Get<ComponentData>().Blueprint.SwitchValue = oldStates[index++];
 
             blueprint.SimulateTick(StateTable);
 

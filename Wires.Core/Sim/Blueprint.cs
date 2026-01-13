@@ -13,6 +13,7 @@ using Paper.Core;
 namespace Wires.Core.Sim;
 public class Blueprint
 {
+    // inline array broken on web?
     //[InlineArray(4)]
     private struct InlineArray4<T>
     {
@@ -26,16 +27,9 @@ public class Blueprint
         {
             get
             {
-                if (index == 0)
-                    return ref _0;
-                if (index == 1)
-                    return ref _1;
-                if (index == 2)
-                    return ref _2;
-                if (index == 3)
-                    return ref _3;
-
-                throw new ArgumentOutOfRangeException();
+                if (!((uint)index < 4))
+                    throw new ArgumentOutOfRangeException();
+                return ref Unsafe.Add(ref _0, index);
             }
         }
     }
@@ -140,14 +134,14 @@ public class Blueprint
 
     public Blueprint Clone(int rotation) => new Blueprint(_data, rotation);
 
-    public ErrDescription? Reset(GlobalStateTable globalStateTable, ulong previousHash)
+    public TickResult? Reset(GlobalStateTable globalStateTable, ulong previousHash)
     {
         if (Custom is null)
             return null;
         return StepStateful(globalStateTable, previousHash);
     }
 
-    public ErrDescription? SimulateTick(GlobalStateTable globalStateTable)
+    public TickResult? SimulateTick(GlobalStateTable globalStateTable)
     {
         var s = StepStateful(globalStateTable, 92821);
 
@@ -156,7 +150,7 @@ public class Blueprint
         return s;
     }
 
-    public ErrDescription? StepStateful(GlobalStateTable stateTable, ulong previousHash)
+    public TickResult? StepStateful(GlobalStateTable stateTable, ulong previousHash)
     {
         if (Custom is null)
             return null;
@@ -166,10 +160,10 @@ public class Blueprint
         int iter = 0;
         foreach(var e in Custom.StepEnumerator(this, stateTable, previousHash))
         {
-            if (e is ErrDescription err)
+            if (e is TickResult err)
                 return err;
             if(iter > MaxIterations)
-                return new ErrDescription(-1, -1, default, default, -1, null, true);
+                return new TickResult.Timeout();
         }
 
         return null;

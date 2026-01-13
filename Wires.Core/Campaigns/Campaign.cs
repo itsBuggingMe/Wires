@@ -100,7 +100,7 @@ internal abstract class Campaign
             if(CurrentEntry.TestCases.Length == 0)
             {
                 _timeSinceLastTestCase = 0;
-                ErrDescription? @short = CurrentEntry.Blueprint.SimulateTick(StateTable);
+                TickResult? @short = CurrentEntry.Blueprint.SimulateTick(StateTable);
                 if(@short is not null)
                 {
                     UI.IsPlaying = false;
@@ -113,7 +113,7 @@ internal abstract class Campaign
                 CurrentEntry.TestCases.Set(TestCaseIndex, CurrentEntry.Blueprint.InputBufferRaw, _outputTempBuffer);
                 _timeSinceLastTestCase = 0;
 
-                ErrDescription? @short = CurrentEntry.Blueprint.SimulateTick(StateTable);
+                TickResult? @short = CurrentEntry.Blueprint.SimulateTick(StateTable);
 
                 if (@short is not null || !CurrentEntry.Blueprint.OutputBufferRaw.AsSpan().SequenceEqual(_outputTempBuffer.AsSpan(0, CurrentEntry.Blueprint.OutputBufferRaw.Length)))
                 {
@@ -136,7 +136,8 @@ internal abstract class Campaign
     {
         _graphics.GraphicsDevice.Clear(Constants.Background);
         _graphics.StartBatches(true);
-        CurrentEntry?.Custom?.Draw(_graphics);
+        // TODO: properly handle ss
+        CurrentEntry?.Custom?.Draw(_graphics, TickResult.Success);
         _interaction.Draw();
         _graphics.EndBatches();
         _graphics.StartBatches();

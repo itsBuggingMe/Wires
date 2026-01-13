@@ -13,6 +13,8 @@ using System.Runtime.InteropServices.Marshalling;
 using System.Text;
 using System.Text.Json;
 using System.Web;
+using Wires.Core.Components.Stateful;
+using Wires.Core.Sim.Components;
 
 namespace Wires.Core.Sim.Saving;
 
@@ -300,7 +302,7 @@ internal static class Levels
 
             foreach (var wire in model.Wires ?? [])
             {
-                simulation.CreateWire(new Wire(new(wire.AX, wire.AY), new(wire.BX, wire.BY)) { WireKind = wire.IsBundle });
+                simulation.CreateWire(new Wire(new(wire.AX, wire.AY), new(wire.BX, wire.BY), wire.IsBundle ? WireKind.Byte : WireKind.Bit));
             }
 
             foreach (var component in model.Components)
@@ -327,12 +329,14 @@ internal static class Levels
                 GridHeight = c.Custom!.Height,
                 Name = c.Name,
                 Components = c.Custom!.Components
+                    .ToArray()
+                    .Select(e => e.Get<ComponentData>())
                     .Select(c => new ComponentModel
                     {
                         BlueprintName = c.Blueprint.Text,
                         X = c.Position.X,
                         Y = c.Position.Y,
-                        AllowDelete = c.AllowDelete,
+                        AllowDelete = c.Deletable,
                         InputOutputId = c.InputOutputId,
                         Rotation = c.Blueprint.Rotation,
                         SwcState = c.Blueprint.Descriptor is Blueprint.IntrinsicBlueprint.Switch ?
@@ -355,13 +359,15 @@ internal static class Levels
                         Outputs = i.Output.Select(c => (int)c.Values).ToArray(),
                     }).ToArray() ?? [],
                 Wires = c.Custom!.Wires
+                    .ToArray()
+                    .Select(e => e.Get<Wire>())
                     .Select(w => new WireModel
                     {
                         AX = w.A.X,
                         AY = w.A.Y,
                         BX = w.B.X,
                         BY = w.B.Y,
-                        IsBundle = w.WireKind,
+                        IsBundle = w.Kind == WireKind.Byte,
                     })
                     .ToArray(),
             })

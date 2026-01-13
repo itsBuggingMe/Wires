@@ -1,4 +1,5 @@
-﻿using Microsoft.Xna.Framework;
+﻿using Frent;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Paper.Core;
@@ -41,7 +42,7 @@ internal class ComponentEditor : IScreen
     private readonly List<Point> _inputs = [];
     private readonly List<Point> _outputs = [];
 
-    private int? _componentId;
+    private Entity _componentId;
 
     private TileKind? _placedTileKind;
 
@@ -254,8 +255,8 @@ internal class ComponentEditor : IScreen
 
     private void UpdateDummyComponent()
     {
-        if (_componentId is not null)
-            _displaySim.DestroyComponent(new Point(SimSize / 2));
+        if (!_componentId.IsNull)
+            _componentId.Delete();
 
         Blueprint blueprint = new Blueprint(_emptySim, _name, _placedTiles.Select(t => (t.Key, t.Value)).ToImmutableArray());
 
@@ -277,7 +278,7 @@ internal class ComponentEditor : IScreen
         _graphics.SpriteBatchText.Begin(samplerState: SamplerState.PointClamp, transformMatrix: _graphics.Camera.View);
 
 
-        _displaySim.Draw(_graphics);
+        _displaySim.Draw(_graphics, TickResult.Success);
 
         if(_placedTileKind is TileKind kind)
         {
