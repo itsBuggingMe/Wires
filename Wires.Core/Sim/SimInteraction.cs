@@ -76,7 +76,7 @@ internal class SimInteraction
 
             if (InputHelper.FallingEdge(MouseButton.Left))
             {
-                foreach (var component in sim.Components)
+                foreach (var component in sim.Components.EnumerateWithEntities())
                 {
                     // TODO: refactor into system
                     if (component.Get<ComponentData>().Position == tileOver && component.Get<ComponentData>() is { Blueprint.Descriptor: Blueprint.IntrinsicBlueprint.Switch })
@@ -158,9 +158,9 @@ internal class SimInteraction
 
             if (MouseButton.Right.FallingEdge() && _activeDragDrop is null && sim.InRange(tileOver))
             {
-                if (sim.IdOfWireAt(tileOver) is { IsAlive: true } wire)
+                if (sim.WireNodeAt(tileOver) is { IsAlive: true } wire)
                 {
-                    wire.Delete();
+                    wire.Get<WireNode>().Wire.Delete();
                     Step();
                 }
                 else if (sim[tileOver].Kind is not TileKind.Nothing)
@@ -190,14 +190,14 @@ internal class SimInteraction
                     _selectRectangle = null;
                     _groupSelection = new GroupSelection();
 
-                    foreach (var id in sim.Components)
+                    foreach (var id in sim.Components.EnumerateWithEntities())
                     {
                         ref ComponentData component = ref id.Get<ComponentData>();
                         if(bounds.Contains(component.Position))
                             _groupSelection.Components.Add(id);
                     }
 
-                    foreach (var wireId in sim.Wires)
+                    foreach (var wireId in sim.Wires.EnumerateWithEntities())
                     {
                         ref Wire wire = ref wireId.Get<Wire>();
                         if (bounds.Contains(wire.A))

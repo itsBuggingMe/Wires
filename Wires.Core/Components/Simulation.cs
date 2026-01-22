@@ -1,5 +1,6 @@
 ﻿using Apos.Shapes;
 using Frent;
+using Frent.Core;
 using Frent.Systems;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
@@ -32,14 +33,11 @@ public class Simulation
     // coord -> wire node
     private ShortSparseSet<FastStack<Entity>> _wireMap = new();
 
-    private FastStack<Entity> _wires = new(16);
-    private FastStack<Entity> _components = new(16);
-
     public int OutputCount { get; private set; }
     public int InputCount { get; private set; }
 
-    public ReadOnlySpan<Entity> Wires => _wires.AsSpan();
-    public ReadOnlySpan<Entity> Components => _components.AsSpan();
+    public Query Wires => _entities.Query<Wire>();
+    public Query Components => _entities.Query<ComponentData>();
 
     private Dictionary<Point, PowerState> _outputs = [];
 
@@ -64,36 +62,45 @@ public class Simulation
     {
         _outputs.Clear();
 
-        _entities.Query<WireState>().Delegate((ref WireState s) =>
+        _entities.Query<Wire>().Delegate((ref Wire s) =>
         {
-            s.Power = PowerState.OffState;
+            s.PowerState = PowerState.OffState;
             s.LastVisitComponent = Entity.Null;
         });
 
         yield return TickResult.Success;
 
         // also add components
-        foreach (Entity component in _components)
+        TickResult? initalErr = null;
+        foreach (var tuple in _entities.Query<ComponentData>().EnumerateWithEntities<ComponentData>())
         {
-            ref ComponentData componentData = ref component.Get<ComponentData>();
+            ref ComponentData componentData = ref tuple.Item1.Value;
 
             if (componentData.Blueprint.Custom is null)
             {
                 Point firstOutputPos = componentData.GetOutputPosition(0);
 
-                PowerState powerToApply = componentData.Blueprint.Descriptor switch
+                PowerState? powerToApply = componentData.Blueprint.Descriptor switch
                 {
                     Blueprint.IntrinsicBlueprint.On => PowerState.OnState,
                     Blueprint.IntrinsicBlueprint.Off => PowerState.OffState,
                     Blueprint.IntrinsicBlueprint.Input => blueprint.InputBuffer(componentData.InputOutputId),
                     Blueprint.IntrinsicBlueprint.Delay => state[GlobalStateTable.CreateAddress(previousAddressHash, componentData.Position)],
                     Blueprint.IntrinsicBlueprint.Switch => componentData.Blueprint.SwitchValue,
-                    _ => throw new Exception("Not a seed component"),
+                    // investigate how I used to update dangling components
+                    _ => null,  
                 };
 
-                _outputs[firstOutputPos] = powerToApply;
+                if (powerToApply is { } p)
+                {
+                    TickResult result = StartVisit(firstOutputPos, tuple.Entity, p);
+                    if (result is not TickResult.NoError)
+                    {
+                        initalErr = result;
+                        break;
+                    }
+                }
 
-                yield return StartVisit(firstOutputPos, component, powerToApply);
                 continue;
             }
 
@@ -104,14 +111,20 @@ public class Simulation
                 PowerState power = componentData.Blueprint.OutputBuffer(i);
                 Point outputPosition = componentData.GetOutputPosition(i);
 
-                if (StartVisit(componentData.GetOutputPosition(i), component, power) is { } err)
+                if (StartVisit(componentData.GetOutputPosition(i), tuple.Entity, power) is { } err)
                 {
-                    yield return new TickResult.InnerError(component, err);
-                    yield break;
+                    initalErr = new TickResult.InnerError(tuple.Entity, err);
+                    break;
                 }
             }
         }
-        
+
+        if (initalErr is not null)
+        {
+            yield return initalErr;
+            yield break;
+        }
+
         // do work
 
         while (_workList.TryDequeue(out WorkItem w))
@@ -381,7 +394,7 @@ public class Simulation
 
     public bool HasWiresAt(Point position) => WiresAt(position).Length != 0;
 
-    public Entity IdOfWireAt(Point position)
+    public Entity WireNodeAt(Point position)
     {
         foreach(var wire in WiresAt(position))
         {
@@ -392,7 +405,11 @@ public class Simulation
 
     public PowerState PowerStateAt(Point position)
     {
-        return IdOfWireAt(position).Get<WireNode>().Wire.Get<Wire>().PowerState;
+        return WireNodeAt(position).TryGet(out Ref<WireNode> node) ? 
+            node.Value.Wire.Get<Wire>().PowerState :
+            _outputs.TryGetValue(position, out PowerState v) ?
+            v :
+            PowerState.OffState;
     }
 
     /// <summary>
@@ -407,15 +424,23 @@ public class Simulation
                 return Entity.Null;
         }
 
+        Entity e = _entities.Create(
+            new ComponentData(position, blueprint.Clone(rotation), inputOutputId, allowDelete, initalState),
+            new GridPositioned(position));
+
+        foreach ((Point offset, TileKind kind) in blueprint.Display)
+        {
+            this[position + offset].Kind = kind;
+            this[position + offset].Meta = e;
+        }
+
         if (blueprint is { Descriptor: Blueprint.IntrinsicBlueprint.Input })
             InputCount++;
 
         if (blueprint is { Descriptor: Blueprint.IntrinsicBlueprint.Output })
             OutputCount++;
 
-        return _entities.Create(
-            new ComponentData(position, blueprint.Clone(rotation), inputOutputId, allowDelete, initalState),
-            new GridPositioned(position));
+        return e;
     }
 
     /// <summary>
@@ -429,16 +454,17 @@ public class Simulation
         ref Wire w = ref wireEntity.Get<Wire>();
 
         ushort aIndex = checked((ushort)(w.A.X + w.A.Y * Width));
-        _wireMap[aIndex].LazyInit().Remove(w.Self);
+        _wireMap[aIndex].LazyInit().Remove(w.ANode);
 
         ushort bIndex = checked((ushort)(w.B.X + w.B.Y * Width));
-        _wireMap[bIndex].LazyInit().Remove(w.Self);
+        _wireMap[bIndex].LazyInit().Remove(w.BNode);
+
+        w.ANode.Delete();
+        w.BNode.Delete();
     }
 
     public void CleanupComponent(Entity component)
     {
-        _components.Remove(component);
-
         Blueprint blueprint = component.Get<ComponentData>().Blueprint;
 
         if (blueprint is { Descriptor: Blueprint.IntrinsicBlueprint.Input })
@@ -461,7 +487,13 @@ public class Simulation
 
     public Entity CreateWire(Wire w)
     {
+
         return _entities.Create(w);
+    }
+
+    public void SetupWireNode(Point p, Entity node)
+    {
+        _wireMap[checked((ushort)(p.X + p.Y * Width))].LazyInit().PushRef() = node;
     }
 
     public void Draw(Graphics g, TickResult tickResult)
@@ -490,20 +522,25 @@ public class Simulation
         Entity shortCircuitComponentId = tickResult is TickResult.ShortCircuit s ? s.ComponentA : default;
 
         int id = 0;
-        foreach (var component in _components.AsSpan())
+        foreach (var (entity, comp) in _entities.Query<ComponentData>()
+            .EnumerateWithEntities<ComponentData>())
         {
             // TODO: refactor to system
-            component.Get<ComponentData>().Blueprint.Draw(g, this, component.Get<ComponentData>().Position, Scale, Constants.WireRad, component == shortCircuitComponentId, component.Get<ComponentData>().InputOutputId);
+            ref ComponentData data = ref comp.Value;
+            data.Blueprint.Draw(g, this, data.Position, Scale, Constants.WireRad, entity == shortCircuitComponentId, comp.Value.InputOutputId);
             id++;
         }
 
-        foreach (var wire in _wires.AsSpan())
+        foreach(var comps in _entities.Query<Wire>()
+            .Enumerate<Wire>())
         {
-            var (color, outline) = wire.Get<Wire>().Kind is WireKind.Byte ?
-                Constants.BundleWireColor :
-                Constants.GetWireColor(wire.Get<Wire>().PowerState);
+            ref Wire w = ref comps.Item1.Value;
 
-            DrawWire(g, Scale, wire.Get<Wire>(), color, outline, wire.Get<Wire>().Kind is WireKind.Byte ? wire.Get<Wire>().PowerState.Values.ToString() : null);
+            var (color, outline) = w.Kind is WireKind.Byte ?
+                Constants.BundleWireColor :
+                Constants.GetWireColor(w.PowerState);
+
+            DrawWire(g, Scale, w, color, outline, w.Kind is WireKind.Byte ? w.PowerState.Values.ToString() : null);
         }
 
         if(tickResult is TickResult.ShortCircuit { Wire.IsAlive: true } e)

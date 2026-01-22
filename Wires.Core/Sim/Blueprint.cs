@@ -134,39 +134,39 @@ public class Blueprint
 
     public Blueprint Clone(int rotation) => new Blueprint(_data, rotation);
 
-    public TickResult? Reset(GlobalStateTable globalStateTable, ulong previousHash)
+    public TickResult Reset(GlobalStateTable globalStateTable, ulong previousHash)
     {
         if (Custom is null)
-            return null;
+            return TickResult.Success;
         return StepStateful(globalStateTable, previousHash);
     }
 
-    public TickResult? SimulateTick(GlobalStateTable globalStateTable)
+    public TickResult SimulateTick(GlobalStateTable globalStateTable)
     {
         var s = StepStateful(globalStateTable, 92821);
 
-        if(s is null) globalStateTable.SwapBuffers();
+        if(s is TickResult.NoError) globalStateTable.SwapBuffers();
 
         return s;
     }
 
-    public TickResult? StepStateful(GlobalStateTable stateTable, ulong previousHash)
+    public TickResult StepStateful(GlobalStateTable stateTable, ulong previousHash)
     {
         if (Custom is null)
-            return null;
+            return TickResult.Success;
 
         const int MaxIterations = 10_000;
 
         int iter = 0;
         foreach(var e in Custom.StepEnumerator(this, stateTable, previousHash))
         {
-            if (e is TickResult err)
-                return err;
+            if (e is not TickResult.NoError)
+                return e;
             if(iter > MaxIterations)
                 return new TickResult.Timeout();
         }
 
-        return null;
+        return TickResult.Success;
     }
 
     public void Draw(Graphics g, Simulation? sim, Point pos, float scale, float wireRad, bool isShortCircuit, int inputOutputId, float opacity = 1f, int? rotationOverride = null)

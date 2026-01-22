@@ -1,6 +1,7 @@
 ﻿#if BLAZORGL
 using Microsoft.JSInterop;
 #endif
+using Frent;
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
@@ -377,4 +378,16 @@ internal static class Levels
     }
 
     public static IEnumerable<ComponentEntry> LoadLevels(List<ComponentEntry> existingEntries) => throw new NotSupportedException();
+
+    public static Entity[] ToArray(this Frent.Systems.Query query)
+    {
+        List<Entity> e = new List<Entity>();
+
+        foreach (var entry in query.EnumerateWithEntities())
+        {
+            e.Add(entry);
+        }
+
+        return e.ToArray();
+    }
 }
