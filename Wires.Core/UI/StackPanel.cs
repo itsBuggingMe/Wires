@@ -11,6 +11,9 @@ internal class StackPanel : BorderedElement
     private readonly bool _isHorizontal;
 
     public int Padding { get; set; } = 8;
+    public float? WrapLength { get; set; }
+    public bool WrapToViewport { get; set; }
+    public int ViewportWrapMargin { get; set; } = Constants.Padding;
 
     public StackPanel(Vector2 pos, UIVector2 shortAxis, bool horizontal = true) : base(pos, shortAxis)
     {
@@ -19,6 +22,15 @@ internal class StackPanel : BorderedElement
 
     public override void Draw()
     {
+        if (_isHorizontal && (WrapLength is not null || WrapToViewport))
+        {
+            float wrapLength = WrapLength ?? Math.Max(
+                Padding * 2,
+                Graphics.GraphicsDevice.Viewport.Width - Position.X - ViewportWrapMargin);
+            DrawWrappedHorizontal(wrapLength);
+            return;
+        }
+
         float max = default;
         float len = default;
 
@@ -50,6 +62,38 @@ internal class StackPanel : BorderedElement
         max += 2 * Padding;
 
         SetSize(_isHorizontal ? new(len, max) : new(max, len));
+
+        base.Draw();
+    }
+
+    private void DrawWrappedHorizontal(float wrapLength)
+    {
+        float rowWidth = Padding;
+        float rowHeight = 0;
+        float width = 0;
+        float height = Padding;
+
+        foreach (var child in Children)
+        {
+            Vector2 size = child.Size;
+
+            if (rowWidth > Padding && rowWidth + size.X + Padding > wrapLength)
+            {
+                width = Math.Max(width, rowWidth);
+                height += rowHeight + Padding;
+                rowWidth = Padding;
+                rowHeight = 0;
+            }
+
+            child.SetPosition(new Vector2(rowWidth, height));
+            rowWidth += size.X + Padding;
+            rowHeight = Math.Max(rowHeight, size.Y);
+        }
+
+        width = Math.Max(width, rowWidth);
+        height += rowHeight + Padding;
+
+        SetSize(new Vector2(width, height));
 
         base.Draw();
     }

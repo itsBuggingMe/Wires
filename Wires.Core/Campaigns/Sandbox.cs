@@ -148,6 +148,10 @@ internal class Sandbox : Campaign
             }
         });
 
+        yield return null;
+
+        Interaction.Step();
+
         while (true)
         {
             Update();

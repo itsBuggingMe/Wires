@@ -68,16 +68,19 @@ public class Simulation
             s.LastVisitComponent = Entity.Null;
         });
 
-        yield return TickResult.Success;
+        yield return TickResult.SuccessInstance;
 
         // also add components
-        TickResult? initalErr = null;
+        TickResult.Error? initialError = null;
         foreach (var tuple in _entities.Query<ComponentData>().EnumerateWithEntities<ComponentData>())
         {
             ref ComponentData componentData = ref tuple.Item1.Value;
 
             if (componentData.Blueprint.Custom is null)
             {
+                if (componentData.Blueprint.Outputs.Length == 0) // skip updating items that are only sinks
+                    continue;
+
                 Point firstOutputPos = componentData.GetOutputPosition(0);
 
                 PowerState? powerToApply = componentData.Blueprint.Descriptor switch
@@ -93,10 +96,9 @@ public class Simulation
 
                 if (powerToApply is { } p)
                 {
-                    TickResult result = StartVisit(firstOutputPos, tuple.Entity, p);
-                    if (result is not TickResult.NoError)
+                    if (StartVisit(firstOutputPos, tuple.Entity, p) is { } error)
                     {
-                        initalErr = result;
+                        initialError = error;
                         break;
                     }
                 }
@@ -104,24 +106,28 @@ public class Simulation
                 continue;
             }
 
-            componentData.Blueprint.StepStateful(state, GlobalStateTable.CreateAddress(previousAddressHash, componentData.Position));
+            if (componentData.Blueprint.StepStateful(state, GlobalStateTable.CreateAddress(previousAddressHash, componentData.Position)) is TickResult.Error stepError)
+            {
+                initialError = new TickResult.InnerError(tuple.Entity, stepError);
+                break;
+            }
 
             for (int i = 0; i < componentData.Blueprint.Outputs.Length; i++)
             {
                 PowerState power = componentData.Blueprint.OutputBuffer(i);
                 Point outputPosition = componentData.GetOutputPosition(i);
 
-                if (StartVisit(componentData.GetOutputPosition(i), tuple.Entity, power) is { } err)
+                if (StartVisit(componentData.GetOutputPosition(i), tuple.Entity, power) is { } error)
                 {
-                    initalErr = new TickResult.InnerError(tuple.Entity, err);
+                    initialError = error;
                     break;
                 }
             }
         }
 
-        if (initalErr is not null)
+        if (initialError is not null)
         {
-            yield return initalErr;
+            yield return initialError;
             yield break;
         }
 
@@ -133,7 +139,7 @@ public class Simulation
             Tile tile = this[w.Position];
             ref ComponentData component = ref tile.Meta.Get<ComponentData>();
 
-            TickResult? currentResult = null;
+            TickResult.Error? currentResult = null;
             switch (component.Blueprint.Descriptor)
             {
                 case Blueprint.IntrinsicBlueprint.Output:
@@ -158,12 +164,10 @@ public class Simulation
 
                     for (int i = 0; i < 8; i++)
                     {
-                        if (StartVisit(component.GetOutputPosition(i), tile.Meta, ((1 << i) & powerState.Values) != 0 ? PowerState.OnState : PowerState.OffState) is TickResult e)
+                        if (StartVisit(component.GetOutputPosition(i), tile.Meta, ((1 << i) & powerState.Values) != 0 ? PowerState.OnState : PowerState.OffState) is { } error)
                         {
-                            currentResult = e;
-
-                            if (e is not TickResult.NoError)
-                                break;
+                            currentResult = error;
+                            break;
                         }
                     }
                     break;
@@ -233,7 +237,7 @@ public class Simulation
 
                     component.Blueprint.OutputBufferRaw.AsSpan().Clear();
 
-                    if(component.Blueprint.StepStateful(state, GlobalStateTable.CreateAddress(previousAddressHash, component.Position)) is TickResult pow)
+                    if(component.Blueprint.StepStateful(state, GlobalStateTable.CreateAddress(previousAddressHash, component.Position)) is TickResult.Error pow)
                     {
                         yield return new TickResult.InnerError(tile.Meta, pow);
                         yield break;
@@ -258,25 +262,25 @@ public class Simulation
                 default: throw new NotImplementedException();
             }
 
-            yield return currentResult ?? TickResult.Success;
+            yield return currentResult is null ? TickResult.SuccessInstance : currentResult;
         }
 
         RecordDelayValues(state, previousAddressHash);
 
-        TickResult StartVisit(Point point, Entity component, PowerState state)
+        TickResult.Error? StartVisit(Point point, Entity component, PowerState state)
         {
             _outputs[point] = state;
 
             foreach (Entity connection in WiresAt(point))
             {
-                if (VisitWire(connection.Get<WireNode>(), component, state) is TickResult err)
+                if (VisitWire(connection.Get<WireNode>(), component, state) is { } err)
                     return err;
             }
 
-            return TickResult.Success;    
+            return null;    
         }
 
-        TickResult? VisitWire(WireNode wireNode, Entity component, PowerState state)
+        TickResult.Error? VisitWire(WireNode wireNode, Entity component, PowerState state)
         {
             ref Wire wire = ref wireNode.Wire.Get<Wire>();
 
@@ -314,7 +318,7 @@ public class Simulation
                 connectedWire.PowerState = state;
 
                 // copy power state to other wires
-                if(VisitWire(connection.Get<WireNode>(), component, state) is TickResult err)
+                if(VisitWire(connection.Get<WireNode>(), component, state) is { } err)
                 {
                     return err;
                 }

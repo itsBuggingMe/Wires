@@ -37,7 +37,9 @@ internal class EditorUI : RootUI<Graphics>
     public SimInteraction Interaction { get; private set; }
     public Campaign? CurrentCampaign => _currentCampaign;
 
-    public bool IsPlaying { get => _isPlaying; set => _isPlaying = value; }
+    public bool IsPlaying { 
+        get => _isPlaying; 
+        set => _isPlaying = value; }
 
 
     private bool _isPlaying = false;
@@ -63,6 +65,10 @@ internal class EditorUI : RootUI<Graphics>
     public EditorUI(Graphics graphics, SimInteraction interaction) : base(graphics.Game, graphics, 1920, 1080)
     {
         Interaction = interaction;
+        Interaction.SimulationChanged += () => {
+            _testCaseIndex = 0;
+            _isPlaying = false;
+        };
         Children = [
         // pancake menu
         new Button(new(Padding), new(48, false), Button.Pancake)
@@ -111,6 +117,7 @@ internal class EditorUI : RootUI<Graphics>
                 {
                     Visible = false,
                     ColorMultipler = 0,
+                    WrapToViewport = true,
                 }],
                 Clicked = p => {
                     _levelsMenu.Visible = false;
@@ -182,9 +189,15 @@ internal class EditorUI : RootUI<Graphics>
             _addMenu.Children = [];
             foreach (var component in PlaceableComponents)
             {
-                _addMenu.AddChild(new Button(default, new Vector2(80, 36), Button.None)
+                const float ButtonHeight = 36;
+                const float ButtonHorizontalPadding = 24;
+
+                string label = component.Blueprint.Text;
+                float buttonWidth = MathF.Max(80, Graphics.Font.MeasureString(label).X + ButtonHorizontalPadding);
+
+                _addMenu.AddChild(new Button(default, new Vector2(buttonWidth, ButtonHeight), Button.None)
                 {
-                    Text = new Text(new(40, 18), component.Blueprint.Text) { ElementAlign = Align.Center },
+                    Text = new Text(new(buttonWidth / 2, ButtonHeight / 2, false, false), label) { ElementAlign = Align.Center },
                     RisingEdge = p =>
                     {
                         Interaction?.BeginPlaceComponent(component);

@@ -137,7 +137,7 @@ public class Blueprint
     public TickResult Reset(GlobalStateTable globalStateTable, ulong previousHash)
     {
         if (Custom is null)
-            return TickResult.Success;
+            return TickResult.SuccessInstance;
         return StepStateful(globalStateTable, previousHash);
     }
 
@@ -145,7 +145,8 @@ public class Blueprint
     {
         var s = StepStateful(globalStateTable, 92821);
 
-        if(s is TickResult.NoError) globalStateTable.SwapBuffers();
+        if (s is TickResult.Success)
+            globalStateTable.SwapBuffers();
 
         return s;
     }
@@ -153,20 +154,20 @@ public class Blueprint
     public TickResult StepStateful(GlobalStateTable stateTable, ulong previousHash)
     {
         if (Custom is null)
-            return TickResult.Success;
+            return TickResult.SuccessInstance;
 
         const int MaxIterations = 10_000;
 
         int iter = 0;
         foreach(var e in Custom.StepEnumerator(this, stateTable, previousHash))
         {
-            if (e is not TickResult.NoError)
-                return e;
-            if(iter > MaxIterations)
+            if (e is TickResult.Error error)
+                return error;
+            if(++iter > MaxIterations)
                 return new TickResult.Timeout();
         }
 
-        return TickResult.Success;
+        return TickResult.SuccessInstance;
     }
 
     public void Draw(Graphics g, Simulation? sim, Point pos, float scale, float wireRad, bool isShortCircuit, int inputOutputId, float opacity = 1f, int? rotationOverride = null)

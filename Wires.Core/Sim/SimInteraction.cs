@@ -83,6 +83,7 @@ internal class SimInteraction
                     {
                         component.Get<ComponentData>().Blueprint.SwitchValue = component.Get<ComponentData>().Blueprint.SwitchValue.On ? PowerState.OffState : PowerState.OnState;
                         Step();
+                        SimulationChanged?.Invoke();
                         return;
                     }
                 }
@@ -95,6 +96,7 @@ internal class SimInteraction
                 {
                     sim.Place(_activeDragDrop.Blueprint, GetTileOver(), _rotation);
                     Step();
+                    SimulationChanged?.Invoke();
                 }
                 return;
             }
@@ -103,6 +105,7 @@ internal class SimInteraction
             {
                 sim.Place(_activeDragDrop.Blueprint, GetTileOver(), _rotation);
                 Step();
+                SimulationChanged?.Invoke();
                 return;
             }
 
@@ -134,6 +137,7 @@ internal class SimInteraction
                 sim.CreateWire(new Wire(_wireDragStart.Value, _wireDragCurrent, _currentPlacedIsBundle ? WireKind.Byte : WireKind.Bit));
                 _wireDragStart = null;
                 Step();
+                SimulationChanged?.Invoke();
                 return;
             }
 
@@ -149,6 +153,7 @@ internal class SimInteraction
             {
                 sim.MoveComponent(_draggedComponentId, tileOver);
                 Step();
+                SimulationChanged?.Invoke();
                 if (!InputHelper.Down(MouseButton.Left))
                 {
                     _draggedComponentId = Entity.Null;
@@ -161,11 +166,12 @@ internal class SimInteraction
                 if (sim.WireNodeAt(tileOver) is { IsAlive: true } wire)
                 {
                     wire.Get<WireNode>().Wire.Delete();
+                    SimulationChanged?.Invoke();
                     Step();
                 }
-                else if (sim[tileOver].Kind is not TileKind.Nothing)
+                else if (sim[tileOver].Kind is not TileKind.Nothing && TryDeleteComponent(sim[tileOver].Meta))
                 {
-                    sim[tileOver].Meta.Delete();
+                    SimulationChanged?.Invoke();
                     Step();
                 }
                 return;
@@ -243,12 +249,13 @@ internal class SimInteraction
             {
                 foreach (var id in _groupSelection.Components)
                 {
-                    id.Delete();
+                    TryDeleteComponent(id);
                 }
 
                 foreach (var (wireId, _) in _groupSelection.WireNodes)
                 {
-                    wireId.Delete();
+                    if (wireId.IsAlive)
+                        wireId.Delete();
                 }
 
                 _groupSelection = null;
@@ -295,8 +302,22 @@ internal class SimInteraction
         }
     }
 
+    private static bool TryDeleteComponent(Entity component)
+    {
+        if (!component.IsAlive)
+            return false;
+
+        if (!component.Get<ComponentData>().Deletable)
+            return false;
+
+        component.Delete();
+        return true;
+    }
+
     private GlobalStateTable _globalStateTable;
     public GlobalStateTable State => _globalStateTable;
+
+    public Action? SimulationChanged { get; set; }
 
     public void Step()
     {

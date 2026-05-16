@@ -278,7 +278,7 @@ internal class ComponentEditor : IScreen
         _graphics.SpriteBatchText.Begin(samplerState: SamplerState.PointClamp, transformMatrix: _graphics.Camera.View);
 
 
-        _displaySim.Draw(_graphics, TickResult.Success);
+        _displaySim.Draw(_graphics, TickResult.SuccessInstance);
 
         if(_placedTileKind is TileKind kind)
         {
