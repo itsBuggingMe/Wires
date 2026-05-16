@@ -31,6 +31,9 @@ internal class SimInteraction
     private Rectangle? _selectRectangle;
     private Point? _selectionDragPrev;
     private SelectionCopyData? _selectionCopied;
+    private readonly Stack<SimulationSnapshot> _undoStack = [];
+    private readonly Stack<SimulationSnapshot> _redoStack = [];
+    private bool _dragUndoCaptured;
 
     public TickResult? TickResult { get; private set; }
 
@@ -40,6 +43,8 @@ internal class SimInteraction
         set
         {
             Reset();
+            _undoStack.Clear();
+            _redoStack.Clear();
             field = value;
             if(value is { Custom: { } sim })
                 _camera.Position = new Vector2(Constants.Scale * sim.Width - Constants.Scale, Constants.Scale * sim.Height - Constants.Scale) * -0.5f;
@@ -71,6 +76,57 @@ internal class SimInteraction
         void UpdateCore()
         {
             Point tileOver = GetTileOver();
+            bool controlDown = Keys.LeftControl.Down() || Keys.RightControl.Down();
+
+            if (controlDown && Keys.Z.RisingEdge())
+            {
+                Undo(sim);
+                return;
+            }
+
+            if (controlDown && Keys.Y.RisingEdge())
+            {
+                Redo(sim);
+                return;
+            }
+
+            if (Keys.LeftShift.Down() && MouseButton.Left.RisingEdge() && _selectRectangle is null)
+            {
+                _selectRectangle = new Rectangle(_camera.ScreenToWorld(InputHelper.MouseLocation.ToVector2()).ToPoint(), default);
+                return;
+            }
+
+            if (_selectRectangle is not null)
+            {
+                var ploc = _selectRectangle.Value.Location;
+                _selectRectangle = new Rectangle(ploc, _camera.ScreenToWorld(InputHelper.MouseLocation.ToVector2()).ToPoint() - ploc);
+
+                if (!MouseButton.Left.Down())
+                {
+                    Rectangle bounds = ExpandSelectionBounds(NormalizeRect(_selectRectangle.Value));
+
+                    _selectRectangle = null;
+                    _groupSelection = new GroupSelection();
+
+                    foreach (var id in sim.Components.EnumerateWithEntities())
+                    {
+                        ref ComponentData component = ref id.Get<ComponentData>();
+                        if(ComponentIntersectsSelection(bounds, component))
+                            _groupSelection.Components.Add(id);
+                    }
+
+                    foreach (var wireId in sim.Wires.EnumerateWithEntities())
+                    {
+                        ref Wire wire = ref wireId.Get<Wire>();
+                        if (TileCenterInSelection(bounds, wire.A))
+                            _groupSelection.WireNodes.Add((wireId, true));
+                        if (TileCenterInSelection(bounds, wire.B))
+                            _groupSelection.WireNodes.Add((wireId, false));
+                    }
+                    return;
+                }
+                return;
+            }
 
             // switch
 
@@ -81,6 +137,7 @@ internal class SimInteraction
                     // TODO: refactor into system
                     if (component.Get<ComponentData>().Position == tileOver && component.Get<ComponentData>() is { Blueprint.Descriptor: Blueprint.IntrinsicBlueprint.Switch })
                     {
+                        RecordUndo(sim);
                         component.Get<ComponentData>().Blueprint.SwitchValue = component.Get<ComponentData>().Blueprint.SwitchValue.On ? PowerState.OffState : PowerState.OnState;
                         Step();
                         SimulationChanged?.Invoke();
@@ -94,24 +151,63 @@ internal class SimInteraction
             {
                 if(_activeDragDrop.Blueprint.Custom != sim)
                 {
-                    sim.Place(_activeDragDrop.Blueprint, GetTileOver(), _rotation);
-                    Step();
-                    SimulationChanged?.Invoke();
+                    RecordUndo(sim);
+                    if (sim.Place(_activeDragDrop.Blueprint, GetTileOver(), _rotation).IsAlive)
+                    {
+                        Step();
+                        SimulationChanged?.Invoke();
+                    }
+                    else
+                    {
+                        DropUndo();
+                    }
                 }
                 return;
             }
-
+            
             if (_activeDragDrop is not null && InputHelper.Down(MouseButton.Right))
             {
-                sim.Place(_activeDragDrop.Blueprint, GetTileOver(), _rotation);
-                Step();
-                SimulationChanged?.Invoke();
+                RecordUndo(sim);
+                if (sim.Place(_activeDragDrop.Blueprint, GetTileOver(), _rotation).IsAlive)
+                {
+                    Step();
+                    SimulationChanged?.Invoke();
+                }
+                else
+                {
+                    DropUndo();
+                }
                 return;
             }
 
             if (_activeDragDrop is not null && InputHelper.FallingEdge(Keys.Space))
             {
                 _rotation++;
+                return;
+            }
+
+            if (_groupSelection is { } selection && MouseButton.Left.RisingEdge() && _selectionDragPrev is null && IsSelectionHandle(selection, tileOver))
+            {
+                _selectionDragPrev = tileOver;
+                RecordUndo(sim);
+                return;
+            }
+
+            if (_selectionDragPrev is Point previousTile && _groupSelection is { } activeSelection)
+            {
+                if (!MouseButton.Left.Down())
+                {
+                    _selectionDragPrev = null;
+                    return;
+                }
+
+                Point delta = tileOver - previousTile;
+                if (delta != default && sim.MoveMany(activeSelection.Components, activeSelection.WireNodes, delta))
+                {
+                    _selectionDragPrev = tileOver;
+                    Step(clearSelection: false);
+                    SimulationChanged?.Invoke();
+                }
                 return;
             }
 
@@ -134,10 +230,18 @@ internal class SimInteraction
                 if (!sim.InRange(_wireDragStart.Value) || !sim.InRange(_wireDragCurrent))
                     return;
 
-                sim.CreateWire(new Wire(_wireDragStart.Value, _wireDragCurrent, _currentPlacedIsBundle ? WireKind.Byte : WireKind.Bit));
+                RecordUndo(sim);
+                Entity created = sim.CreateWire(new Wire(_wireDragStart.Value, _wireDragCurrent, _currentPlacedIsBundle ? WireKind.Byte : WireKind.Bit));
                 _wireDragStart = null;
-                Step();
-                SimulationChanged?.Invoke();
+                if (created.IsAlive)
+                {
+                    Step();
+                    SimulationChanged?.Invoke();
+                }
+                else
+                {
+                    DropUndo();
+                }
                 return;
             }
 
@@ -146,17 +250,27 @@ internal class SimInteraction
                 (sim[tileOver].Kind is TileKind.Output or TileKind.Input or TileKind.Component))
             {
                 _draggedComponentId = sim[tileOver].Meta;
+                _dragUndoCaptured = false;
                 return;
             }
 
             if (_draggedComponentId.IsAlive && sim.InRange(tileOver) && !sim.HasWiresAt(tileOver))
             {
-                sim.MoveComponent(_draggedComponentId, tileOver);
-                Step();
-                SimulationChanged?.Invoke();
+                if (!_dragUndoCaptured)
+                {
+                    RecordUndo(sim);
+                    _dragUndoCaptured = true;
+                }
+
+                if (sim.MoveComponent(_draggedComponentId, tileOver))
+                {
+                    Step();
+                    SimulationChanged?.Invoke();
+                }
                 if (!InputHelper.Down(MouseButton.Left))
                 {
                     _draggedComponentId = Entity.Null;
+                    _dragUndoCaptured = false;
                 }
                 return;
             }
@@ -165,88 +279,36 @@ internal class SimInteraction
             {
                 if (sim.WireNodeAt(tileOver) is { IsAlive: true } wire)
                 {
+                    RecordUndo(sim);
                     wire.Get<WireNode>().Wire.Delete();
                     SimulationChanged?.Invoke();
                     Step();
                 }
-                else if (sim[tileOver].Kind is not TileKind.Nothing && TryDeleteComponent(sim[tileOver].Meta))
+                else if (sim[tileOver].Kind is not TileKind.Nothing)
                 {
-                    SimulationChanged?.Invoke();
-                    Step();
-                }
-                return;
-            }
-
-            if (Keys.LeftShift.Down() && MouseButton.Left.RisingEdge() && _selectRectangle is null)
-            {
-                _selectRectangle = new Rectangle(_camera.ScreenToWorld(InputHelper.MouseLocation.ToVector2()).ToPoint(), default);
-                return;
-            }
-            if (_selectRectangle is not null)
-            {
-                var ploc = _selectRectangle.Value.Location;
-                _selectRectangle = new Rectangle(ploc, _camera.ScreenToWorld(InputHelper.MouseLocation.ToVector2()).ToPoint() - ploc);
-
-                if (!MouseButton.Left.Down())
-                {
-                    Rectangle bounds = NormalizeRect(_selectRectangle.Value);
-                    bounds.Location /= new Point(Constants.Scale);
-                    bounds.Size /= new Point(Constants.Scale);
-
-                    _selectRectangle = null;
-                    _groupSelection = new GroupSelection();
-
-                    foreach (var id in sim.Components.EnumerateWithEntities())
+                    RecordUndo(sim);
+                    if (TryDeleteComponent(sim[tileOver].Meta))
                     {
-                        ref ComponentData component = ref id.Get<ComponentData>();
-                        if(bounds.Contains(component.Position))
-                            _groupSelection.Components.Add(id);
+                        SimulationChanged?.Invoke();
+                        Step();
                     }
-
-                    foreach (var wireId in sim.Wires.EnumerateWithEntities())
+                    else
                     {
-                        ref Wire wire = ref wireId.Get<Wire>();
-                        if (bounds.Contains(wire.A))
-                            _groupSelection.WireNodes.Add((wireId, true));
-                        if (bounds.Contains(wire.B))
-                            _groupSelection.WireNodes.Add((wireId, false));
+                        DropUndo();
                     }
-                    return;
                 }
                 return;
             }
 
-            if (_groupSelection is not null && (Keys.LeftControl.Down() || Keys.RightControl.Down()) && Keys.C.Down())
+            if (_groupSelection is not null && controlDown && Keys.C.RisingEdge())
             {
-                _selectionCopied = new SelectionCopyData();
-                Point min = new(int.MaxValue, int.MaxValue);
-                Point max = new(int.MinValue, int.MinValue);
-
-                foreach (var id in _groupSelection.Components)
-                {
-                    ref ComponentData component = ref id.Get<ComponentData>();
-                    min = new Point(int.Min(min.X, component.Position.X), int.Min(min.Y, component.Position.Y));
-                    max = new Point(int.Max(max.X, component.Position.X), int.Max(max.Y, component.Position.Y));
-
-                    _selectionCopied.Components.Add((component.Blueprint, component.Position, component.Blueprint.Rotation));
-                }
-
-                foreach (var (wireId, _) in _groupSelection.WireNodes)
-                {
-                    ref Wire wire = ref wireId.Get<Wire>();
-
-                    min = new Point(int.Min(min.X, int.Min(wire.A.X, wire.B.X)), int.Min(min.Y, int.Min(wire.A.Y, wire.B.Y)));
-                    max = new Point(int.Max(max.X, int.Max(wire.A.X, wire.B.X)), int.Max(max.Y, int.Max(wire.A.Y, wire.B.Y)));
-
-                    _selectionCopied.Wires.Add(wire);
-                }
-                _selectionCopied.Wires = _selectionCopied.Wires.Distinct().ToList();
-
-                _selectionCopied.Center = (min + max) / new Point(2);
+                CopySelection();
+                return;
             }
 
-            if (_groupSelection is not null && (Keys.Back.Down() || Keys.Delete.Down()))
+            if (_groupSelection is not null && (Keys.Back.RisingEdge() || Keys.Delete.RisingEdge()))
             {
+                RecordUndo(sim);
                 foreach (var id in _groupSelection.Components)
                 {
                     TryDeleteComponent(id);
@@ -261,17 +323,21 @@ internal class SimInteraction
                 _groupSelection = null;
                 _selectionDragPrev = null;
                 _selectRectangle = null;
+                Step(clearSelection: false);
+                SimulationChanged?.Invoke();
+                return;
             }
 
-            if ((Keys.LeftControl.Down() || Keys.RightControl.Down()) && Keys.V.RisingEdge() && _selectionCopied is not null)
+            if (controlDown && Keys.V.RisingEdge() && _selectionCopied is not null)
             {
                 List<Entity> compIds = [];
                 List<Entity> wireIds = [];
 
-                foreach ((Blueprint blueprint, Point position, int rotation) in _selectionCopied.Components)
+                RecordUndo(sim);
+                foreach ((Blueprint blueprint, Point position, int rotation, bool switchState) in _selectionCopied.Components)
                 {
                     var pos = position + tileOver - _selectionCopied.Center;
-                    compIds.Add(sim.Place(blueprint, pos, rotation));
+                    compIds.Add(sim.Place(blueprint, pos, rotation, initalState: switchState));
                 }
 
                 foreach(var wire in _selectionCopied.Wires)
@@ -291,6 +357,10 @@ internal class SimInteraction
                         return ((Entity, bool)[])[(id, true), (id, false)];
                     }).ToList(),
                 };
+
+                Step();
+                SimulationChanged?.Invoke();
+                return;
             }
 
             if(MouseButton.Left.RisingEdge())
@@ -300,6 +370,110 @@ internal class SimInteraction
                 _selectRectangle = null;
             }
         }
+    }
+
+    private void CopySelection()
+    {
+        if (_groupSelection is null)
+            return;
+
+        _selectionCopied = new SelectionCopyData();
+        Point min = new(int.MaxValue, int.MaxValue);
+        Point max = new(int.MinValue, int.MinValue);
+
+        foreach (var id in _groupSelection.Components.Where(id => id.IsAlive))
+        {
+            ref ComponentData component = ref id.Get<ComponentData>();
+            min = new Point(int.Min(min.X, component.Position.X), int.Min(min.Y, component.Position.Y));
+            max = new Point(int.Max(max.X, component.Position.X), int.Max(max.Y, component.Position.Y));
+
+            _selectionCopied.Components.Add((
+                component.Blueprint,
+                component.Position,
+                component.Blueprint.Rotation,
+                component.Blueprint.Descriptor is Blueprint.IntrinsicBlueprint.Switch && component.Blueprint.SwitchValue.On));
+        }
+
+        foreach (var wireId in _groupSelection.WireNodes.Select(w => w.Id).Where(id => id.IsAlive).Distinct())
+        {
+            ref Wire wire = ref wireId.Get<Wire>();
+
+            min = new Point(int.Min(min.X, int.Min(wire.A.X, wire.B.X)), int.Min(min.Y, int.Min(wire.A.Y, wire.B.Y)));
+            max = new Point(int.Max(max.X, int.Max(wire.A.X, wire.B.X)), int.Max(max.Y, int.Max(wire.A.Y, wire.B.Y)));
+
+            _selectionCopied.Wires.Add(wire);
+        }
+
+        if (_selectionCopied.Components.Count == 0 && _selectionCopied.Wires.Count == 0)
+        {
+            _selectionCopied = null;
+            return;
+        }
+
+        _selectionCopied.Center = (min + max) / new Point(2);
+    }
+
+    private bool IsSelectionHandle(GroupSelection selection, Point tile)
+    {
+        foreach (var componentId in selection.Components.Where(id => id.IsAlive))
+        {
+            ref ComponentData component = ref componentId.Get<ComponentData>();
+            foreach ((Point offset, _) in component.Blueprint.Display)
+            {
+                if (component.Position + offset == tile)
+                    return true;
+            }
+        }
+
+        foreach (var (wireId, side) in selection.WireNodes)
+        {
+            if (!wireId.IsAlive)
+                continue;
+
+            ref Wire wire = ref wireId.Get<Wire>();
+            if ((side ? wire.A : wire.B) == tile)
+                return true;
+        }
+
+        return false;
+    }
+
+    private void RecordUndo(Simulation simulation)
+    {
+        _undoStack.Push(simulation.CreateSnapshot());
+        _redoStack.Clear();
+    }
+
+    private void DropUndo()
+    {
+        if (_undoStack.Count > 0)
+            _undoStack.Pop();
+    }
+
+    private void Undo(Simulation simulation)
+    {
+        if (_undoStack.Count == 0)
+            return;
+
+        _redoStack.Push(simulation.CreateSnapshot());
+        simulation.RestoreSnapshot(_undoStack.Pop());
+        _groupSelection = null;
+        _selectionDragPrev = null;
+        Step();
+        SimulationChanged?.Invoke();
+    }
+
+    private void Redo(Simulation simulation)
+    {
+        if (_redoStack.Count == 0)
+            return;
+
+        _undoStack.Push(simulation.CreateSnapshot());
+        simulation.RestoreSnapshot(_redoStack.Pop());
+        _groupSelection = null;
+        _selectionDragPrev = null;
+        Step();
+        SimulationChanged?.Invoke();
     }
 
     private static bool TryDeleteComponent(Entity component)
@@ -319,9 +493,10 @@ internal class SimInteraction
 
     public Action? SimulationChanged { get; set; }
 
-    public void Step()
+    public void Step(bool clearSelection = true)
     {
-        _groupSelection = null;
+        if (clearSelection)
+            _groupSelection = null;
         _globalStateTable.Reset();
         TickResult = ActiveEntry?.Blueprint.SimulateTick(_globalStateTable);
     }
@@ -407,6 +582,30 @@ internal class SimInteraction
 
         return new Rectangle(x, y, w, h);
     }
+
+    private static Rectangle ExpandSelectionBounds(Rectangle r)
+    {
+        const int ExpandAmount = Constants.Scale / 2;
+        r.Inflate(ExpandAmount, ExpandAmount);
+        return r;
+    }
+
+    private static bool ComponentIntersectsSelection(Rectangle selectionBounds, ComponentData component)
+    {
+        foreach ((Point offset, _) in component.Blueprint.Display)
+        {
+            if (TileCenterInSelection(selectionBounds, component.Position + offset))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool TileCenterInSelection(Rectangle selectionBounds, Point tile)
+    {
+        Vector2 center = tile.ToVector2() * Constants.Scale;
+        return selectionBounds.Contains(center);
+    }
     private class GroupSelection
     {
         public List<Entity> Components { get; set; } = [];
@@ -415,7 +614,7 @@ internal class SimInteraction
 
     private class SelectionCopyData
     {
-        public List<(Blueprint Blueprint, Point Position, int Rotation)> Components { get; set; } = [];
+        public List<(Blueprint Blueprint, Point Position, int Rotation, bool SwitchState)> Components { get; set; } = [];
         public List<Wire> Wires { get; set; } = [];
         public Point Center { get; set; }
     }

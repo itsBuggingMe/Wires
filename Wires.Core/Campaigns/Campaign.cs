@@ -7,6 +7,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Input;
 using Wires.Core.Sim;
 using Wires.Core.UI;
 using System.Collections.ObjectModel;
@@ -64,6 +65,7 @@ internal abstract class Campaign
 
         UI = editorUI;
         UI.PlayButton.Clicked += p => _timeSinceLastTestCase = 0;
+        UI.ResetButton.Clicked += p => _timeSinceLastTestCase = 0;
 
         // levels
         _levelStateMachine = LevelLogic().GetEnumerator();
@@ -95,40 +97,52 @@ internal abstract class Campaign
 
         _levelStateMachine.MoveNext();
 
+        if (CurrentEntry?.TestCases is not null && !UI.IsPlaying && Keys.Right.RisingEdge())
+        {
+            AdvanceSimulationStep();
+        }
+
         if (CurrentEntry?.TestCases is not null && _timeSinceLastTestCase > 30 && UI.IsPlaying)
         {
-            if(CurrentEntry.TestCases.Length == 0)
-            {
-                _timeSinceLastTestCase = 0;
-                TickResult tickResult = CurrentEntry.Blueprint.SimulateTick(StateTable);
-                if(tickResult is TickResult.Error)
-                {
-                    UI.IsPlaying = false;
-                }
-                TestCaseIndex++;
-            }
-            else
-            {
-                TestCaseIndex = TestCaseIndex % CurrentEntry.TestCases.Length;
-                CurrentEntry.TestCases.Set(TestCaseIndex, CurrentEntry.Blueprint.InputBufferRaw, _outputTempBuffer);
-                _timeSinceLastTestCase = 0;
+            AdvanceSimulationStep();
+        }
+    }
 
-                TickResult tickResult = CurrentEntry.Blueprint.SimulateTick(StateTable);
+    private void AdvanceSimulationStep()
+    {
+        if (CurrentEntry?.TestCases is null)
+            return;
 
-                if (tickResult is TickResult.Error || !CurrentEntry.Blueprint.OutputBufferRaw.AsSpan().SequenceEqual(_outputTempBuffer.AsSpan(0, CurrentEntry.Blueprint.OutputBufferRaw.Length)))
-                {
-                    UI.IsPlaying = false;
-                }
-                else if (TestCaseIndex == CurrentEntry.TestCases.Length - 1)
-                {
-                    _passAllCases = true;
-                    UI.IsPlaying = false;
-                }
-                else
-                {
-                    TestCaseIndex = (TestCaseIndex + 1) % CurrentEntry.TestCases.Length;
-                }
+        if(CurrentEntry.TestCases.Length == 0)
+        {
+            _timeSinceLastTestCase = 0;
+            TickResult result = CurrentEntry.Blueprint.SimulateTick(StateTable);
+            if(result is TickResult.Error)
+            {
+                UI.IsPlaying = false;
             }
+            TestCaseIndex++;
+            return;
+        }
+
+        TestCaseIndex = TestCaseIndex % CurrentEntry.TestCases.Length;
+        CurrentEntry.TestCases.Set(TestCaseIndex, CurrentEntry.Blueprint.InputBufferRaw, _outputTempBuffer);
+        _timeSinceLastTestCase = 0;
+
+        TickResult tickResult = CurrentEntry.Blueprint.SimulateTick(StateTable);
+
+        if (tickResult is TickResult.Error || !CurrentEntry.Blueprint.OutputBufferRaw.AsSpan().SequenceEqual(_outputTempBuffer.AsSpan(0, CurrentEntry.Blueprint.OutputBufferRaw.Length)))
+        {
+            UI.IsPlaying = false;
+        }
+        else if (TestCaseIndex == CurrentEntry.TestCases.Length - 1)
+        {
+            _passAllCases = true;
+            UI.IsPlaying = false;
+        }
+        else
+        {
+            TestCaseIndex = (TestCaseIndex + 1) % CurrentEntry.TestCases.Length;
         }
     }
 

@@ -9,6 +9,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Wires.Core;
 using Paper.Core;
+using System.Collections.Generic;
 
 namespace Wires.Core.Sim;
 public class Blueprint
@@ -151,23 +152,46 @@ public class Blueprint
         return s;
     }
 
+    const int MaxIterations = 10_000;
     public TickResult StepStateful(GlobalStateTable stateTable, ulong previousHash)
     {
         if (Custom is null)
             return TickResult.SuccessInstance;
 
-        const int MaxIterations = 10_000;
 
         int iter = 0;
-        foreach(var e in Custom.StepEnumerator(this, stateTable, previousHash))
+        foreach (var e in Custom.StepEnumerator(this, stateTable, previousHash))
         {
             if (e is TickResult.Error error)
                 return error;
-            if(++iter > MaxIterations)
+            if (++iter > MaxIterations)
                 return new TickResult.Timeout();
         }
 
         return TickResult.SuccessInstance;
+    }
+
+    public IEnumerable<TickResult> BeginStepStateful(GlobalStateTable stateTable, ulong previousHash)
+    {
+        if (Custom is null)
+        {
+            yield return TickResult.SuccessInstance;
+            yield break;
+        }
+
+
+        int iter = 0;
+        foreach (var e in Custom.StepEnumerator(this, stateTable, previousHash))
+        {
+            if (e is TickResult.Error error)
+                yield return error;
+            if (++iter > MaxIterations)
+            {
+                yield return new TickResult.Timeout();
+                yield break;
+            }
+            yield return e;
+        }
     }
 
     public void Draw(Graphics g, Simulation? sim, Point pos, float scale, float wireRad, bool isShortCircuit, int inputOutputId, float opacity = 1f, int? rotationOverride = null)
@@ -247,6 +271,18 @@ public class Blueprint
 
         if (Descriptor is IntrinsicBlueprint.Switch || (Descriptor is IntrinsicBlueprint.Disp && sim is not null))
             return;
+
+        if (Descriptor is IntrinsicBlueprint.RAM && sim is not null)
+        {
+            PowerState address = sim.PowerStateAt(Inputs[2] + pos);
+            PowerState value = sim.PowerStateAt(Outputs[0] + pos);
+            string ramReadout = $"A:{address.Values:X2}\nV:{value.Values:X2}";
+            Vector2 readoutSize = g.Font.MeasureString(ramReadout);
+
+            g.SpriteBatchText.DrawString(g.Font, ramReadout, pos.ToVector2() * scale,
+                Color.White, rotation * MathHelper.PiOver2, readoutSize * 0.5f, 0.75f, default, default);
+            return;
+        }
 
         string textToDraw = Descriptor switch
         {

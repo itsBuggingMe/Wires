@@ -17,6 +17,7 @@ internal class EditorUI : RootUI<Graphics>
     public Button AddButton => _addButton;
     public Button PlayButton => _playButton;
     public Button NextButton => _nextButton;
+    public Button ResetButton => _resetButton;
     public StackPanel AddMenu => _addMenu;
     public StackPanel CampaignsMenu => _campaignsMenu;
     public Button NewComponentButton => _chip;
@@ -24,6 +25,7 @@ internal class EditorUI : RootUI<Graphics>
     private readonly StackPanel _menu;
     private readonly Button _addButton;
     private readonly Button _playButton;
+    private readonly Button _resetButton;
     private readonly Button _nextButton;
     private readonly StackPanel _addMenu;
     private readonly StackPanel _campaignsMenu;
@@ -151,12 +153,6 @@ internal class EditorUI : RootUI<Graphics>
                 Clicked = p =>
                 {
                     _isPlaying = !_isPlaying;
-                    if(_isPlaying)
-                    {
-                        _testCaseIndex = 0;
-                        CurrentEntry?.TestCases?.Set(TestCaseIndex, CurrentEntry.Blueprint.InputBufferRaw, _tempPowerStateBuffer);
-                        Interaction.Step();
-                    }
                 },
                 Children = [
                     new Text(new(-64 - Padding, Padding, false, false), contentSource: () => CurrentEntry switch
@@ -167,7 +163,16 @@ internal class EditorUI : RootUI<Graphics>
                     })
                     {
                         ElementAlign = Align.TopRight,
-                    }
+                    },
+                    _resetButton = new Button(new(0, 64 + Padding, false, false), new(64), Button.None)
+                    {
+                        ElementAlign = Align.TopRight,
+                        Visible = false,
+                        Clicked = p => ResetSimulation(),
+                        Children = [
+                            new Text(new(-32, 32), "Reset") {  ElementAlign = Align.Center },
+                        ]
+                    },
                 ]
             },
             _nextButton = new Button(new(1920 - Padding, 1080 - Padding), new(280, 60), Button.None)
@@ -295,6 +300,7 @@ internal class EditorUI : RootUI<Graphics>
         }
 
         _playButton.Visible = entry.TestCases is not null;
+        _resetButton.Visible = entry.TestCases is not null;
         Interaction.ActiveEntry = entry;
         NextButton.Visible = CurrentCampaign?.NextButtonVisible ?? false;
         _testCaseIndex = 0;
@@ -310,5 +316,13 @@ internal class EditorUI : RootUI<Graphics>
             };
             AddChild(_currentDisplayTable);
         }
+    }
+
+    private void ResetSimulation()
+    {
+        _testCaseIndex = 0;
+        _isPlaying = false;
+        CurrentEntry?.TestCases?.Set(TestCaseIndex, CurrentEntry.Blueprint.InputBufferRaw, _tempPowerStateBuffer);
+        Interaction.Step();
     }
 }

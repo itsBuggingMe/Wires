@@ -71,7 +71,7 @@ public class Simulation
         yield return TickResult.SuccessInstance;
 
         // also add components
-        TickResult.Error? initialError = null;
+        TickResult initialError = TickResult.SuccessInstance;
         foreach (var tuple in _entities.Query<ComponentData>().EnumerateWithEntities<ComponentData>())
         {
             ref ComponentData componentData = ref tuple.Item1.Value;
@@ -96,7 +96,7 @@ public class Simulation
 
                 if (powerToApply is { } p)
                 {
-                    if (StartVisit(firstOutputPos, tuple.Entity, p) is { } error)
+                    if (StartVisit(firstOutputPos, tuple.Entity, p) is TickResult.Error error)
                     {
                         initialError = error;
                         break;
@@ -117,7 +117,7 @@ public class Simulation
                 PowerState power = componentData.Blueprint.OutputBuffer(i);
                 Point outputPosition = componentData.GetOutputPosition(i);
 
-                if (StartVisit(componentData.GetOutputPosition(i), tuple.Entity, power) is { } error)
+                if (StartVisit(componentData.GetOutputPosition(i), tuple.Entity, power) is TickResult.Error error)
                 {
                     initialError = error;
                     break;
@@ -125,7 +125,7 @@ public class Simulation
             }
         }
 
-        if (initialError is not null)
+        if (initialError is TickResult.Error)
         {
             yield return initialError;
             yield break;
@@ -139,7 +139,7 @@ public class Simulation
             Tile tile = this[w.Position];
             ref ComponentData component = ref tile.Meta.Get<ComponentData>();
 
-            TickResult.Error? currentResult = null;
+            TickResult currentResult = TickResult.SuccessInstance;
             switch (component.Blueprint.Descriptor)
             {
                 case Blueprint.IntrinsicBlueprint.Output:
@@ -164,7 +164,7 @@ public class Simulation
 
                     for (int i = 0; i < 8; i++)
                     {
-                        if (StartVisit(component.GetOutputPosition(i), tile.Meta, ((1 << i) & powerState.Values) != 0 ? PowerState.OnState : PowerState.OffState) is { } error)
+                        if (StartVisit(component.GetOutputPosition(i), tile.Meta, ((1 << i) & powerState.Values) != 0 ? PowerState.OnState : PowerState.OffState) is TickResult.Error error)
                         {
                             currentResult = error;
                             break;
@@ -262,30 +262,35 @@ public class Simulation
                 default: throw new NotImplementedException();
             }
 
-            yield return currentResult is null ? TickResult.SuccessInstance : currentResult;
+            yield return currentResult;
         }
 
         RecordDelayValues(state, previousAddressHash);
 
-        TickResult.Error? StartVisit(Point point, Entity component, PowerState state)
+        TickResult StartVisit(Point point, Entity component, PowerState state)
         {
             _outputs[point] = state;
 
             foreach (Entity connection in WiresAt(point))
             {
-                if (VisitWire(connection.Get<WireNode>(), component, state) is { } err)
+                if (VisitWire(connection.Get<WireNode>(), component, state) is TickResult.Error err)
                     return err;
             }
 
-            return null;    
+            return TickResult.SuccessInstance;    
         }
 
-        TickResult.Error? VisitWire(WireNode wireNode, Entity component, PowerState state)
+        TickResult VisitWire(WireNode wireNode, Entity component, PowerState state)
         {
             ref Wire wire = ref wireNode.Wire.Get<Wire>();
 
+            if(wire.ANode.Get<GridPositioned>().Position == new Point(63, 57) || wire.BNode.Get<GridPositioned>().Position == new Point(63, 57))
+            {
+
+            }
+
             if (wire.PowerState == state && wire.LastVisitComponent == component)
-                return null;
+                return TickResult.SuccessInstance;
 
             if (wire.PowerState != state && wire.LastVisitComponent.IsAlive && wire.LastVisitComponent != component)
                 return new TickResult.ShortCircuit(wireNode.Wire, component, wire.LastVisitComponent);
@@ -318,13 +323,13 @@ public class Simulation
                 connectedWire.PowerState = state;
 
                 // copy power state to other wires
-                if(VisitWire(connection.Get<WireNode>(), component, state) is { } err)
+                if(VisitWire(connection.Get<WireNode>(), component, state) is TickResult.Error err)
                 {
                     return err;
                 }
             }
 
-            return null;
+            return TickResult.SuccessInstance;
         }
 
         bool ConnectedToAnOutput(Point connection)
@@ -371,19 +376,105 @@ public class Simulation
         // validate
         foreach((Point offset, _) in comp.Blueprint.Display)
         {
-            if (this[to + offset].Kind is not TileKind.Nothing && this[to + offset].Meta != component)
+            Point destination = to + offset;
+            if (!InRange(destination))
+                return false;
+
+            if (this[destination].Kind is not TileKind.Nothing && this[destination].Meta != component)
                 return false;
         }
 
         // clear
         foreach ((Point offset, _) in comp.Blueprint.Display)
         {
-            this[comp.Position + offset].Kind = TileKind.Nothing;
+            this[comp.Position + offset] = default;
         }
 
         foreach ((Point offset, TileKind kind) in comp.Blueprint.Display)
         {
-            this[to + offset].Kind = kind;
+            this[to + offset] = new Tile { Kind = kind, Meta = component };
+        }
+
+        comp.Position = to;
+        return true;
+    }
+
+    public bool MoveMany(IReadOnlyCollection<Entity> components, IReadOnlyCollection<(Entity Id, bool IsA)> wireNodes, Point delta)
+    {
+        if (delta == default)
+            return true;
+
+        HashSet<Entity> componentSet = components.Where(c => c.IsAlive).ToHashSet();
+        Dictionary<Entity, (bool MoveA, bool MoveB)> wireMoves = [];
+
+        foreach (var (wireId, isA) in wireNodes)
+        {
+            if (!wireId.IsAlive)
+                continue;
+
+            if (!wireMoves.TryGetValue(wireId, out var move))
+                move = default;
+
+            move = isA ? (true, move.MoveB) : (move.MoveA, true);
+            wireMoves[wireId] = move;
+        }
+
+        foreach (Entity component in componentSet)
+        {
+            ref ComponentData data = ref component.Get<ComponentData>();
+            foreach ((Point offset, _) in data.Blueprint.Display)
+            {
+                Point destination = data.Position + offset + delta;
+                if (!InRange(destination))
+                    return false;
+
+                Tile destinationTile = this[destination];
+                if (destinationTile.Kind is not TileKind.Nothing && !componentSet.Contains(destinationTile.Meta))
+                    return false;
+            }
+        }
+
+        foreach (var (wireId, move) in wireMoves)
+        {
+            ref Wire wire = ref wireId.Get<Wire>();
+            Point destinationA = move.MoveA ? wire.A + delta : wire.A;
+            Point destinationB = move.MoveB ? wire.B + delta : wire.B;
+
+            if (!CanPlaceWireEndpoint(destinationA, componentSet) ||
+                !CanPlaceWireEndpoint(destinationB, componentSet) ||
+                destinationA == destinationB)
+            {
+                return false;
+            }
+        }
+
+        foreach (Entity component in componentSet)
+        {
+            ref ComponentData data = ref component.Get<ComponentData>();
+            foreach ((Point offset, _) in data.Blueprint.Display)
+                this[data.Position + offset] = default;
+        }
+
+        foreach (Entity component in componentSet)
+        {
+            ref ComponentData data = ref component.Get<ComponentData>();
+            data.Position += delta;
+
+            foreach ((Point offset, TileKind kind) in data.Blueprint.Display)
+                this[data.Position + offset] = new Tile { Kind = kind, Meta = component };
+        }
+
+        foreach (var (wireId, move) in wireMoves)
+        {
+            ref Wire wire = ref wireId.Get<Wire>();
+            RemoveWireNodes(wire);
+
+            if (move.MoveA)
+                wire.A += delta;
+            if (move.MoveB)
+                wire.B += delta;
+
+            RebuildWireNodes(wireId, ref wire);
         }
 
         return true;
@@ -422,14 +513,20 @@ public class Simulation
     /// <returns><see cref="Entity.Null"/> when unable to place, or an entity reference to the component.</returns>
     public Entity Place(Blueprint blueprint, Point position, int rotation, bool allowDelete = true, int inputOutputId = 0, bool initalState = false)
     {
+        blueprint = blueprint.Clone(rotation);
+
+        if (blueprint.Descriptor is Blueprint.IntrinsicBlueprint.Switch)
+            blueprint.SwitchValue = initalState ? PowerState.OnState : PowerState.OffState;
+
         foreach ((Point offset, _) in blueprint.Display)
         {
-            if (this[position + offset].Kind is not TileKind.Nothing)
+            Point tilePosition = position + offset;
+            if (!InRange(tilePosition) || this[tilePosition].Kind is not TileKind.Nothing)
                 return Entity.Null;
         }
 
         Entity e = _entities.Create(
-            new ComponentData(position, blueprint.Clone(rotation), inputOutputId, allowDelete, initalState),
+            new ComponentData(position, blueprint, inputOutputId, allowDelete, initalState),
             new GridPositioned(position));
 
         foreach ((Point offset, TileKind kind) in blueprint.Display)
@@ -444,6 +541,9 @@ public class Simulation
         if (blueprint is { Descriptor: Blueprint.IntrinsicBlueprint.Output })
             OutputCount++;
 
+        if (blueprint is { Descriptor: Blueprint.IntrinsicBlueprint.Delay })
+            _delayComponentIds.Add(e);
+
         return e;
     }
 
@@ -456,31 +556,26 @@ public class Simulation
             return;
 
         ref Wire w = ref wireEntity.Get<Wire>();
-
-        ushort aIndex = checked((ushort)(w.A.X + w.A.Y * Width));
-        _wireMap[aIndex].LazyInit().Remove(w.ANode);
-
-        ushort bIndex = checked((ushort)(w.B.X + w.B.Y * Width));
-        _wireMap[bIndex].LazyInit().Remove(w.BNode);
-
-        w.ANode.Delete();
-        w.BNode.Delete();
+        RemoveWireNodes(w);
     }
 
     public void CleanupComponent(Entity component)
     {
-        Blueprint blueprint = component.Get<ComponentData>().Blueprint;
+        ref ComponentData componentData = ref component.Get<ComponentData>();
+        Blueprint blueprint = componentData.Blueprint;
 
         if (blueprint is { Descriptor: Blueprint.IntrinsicBlueprint.Input })
-            InputCount++;
+            InputCount--;
 
         if (blueprint is { Descriptor: Blueprint.IntrinsicBlueprint.Output })
-            OutputCount++;
+            OutputCount--;
+
+        if (blueprint is { Descriptor: Blueprint.IntrinsicBlueprint.Delay })
+            _delayComponentIds.Remove(component);
 
         foreach ((Point offset, _) in blueprint.Display)
         {
-            this[offset].Kind = TileKind.Nothing;
-            this[offset].Meta = default;
+            this[componentData.Position + offset] = default;
         }
     }
 
@@ -491,6 +586,11 @@ public class Simulation
 
     public Entity CreateWire(Wire w)
     {
+        if (w.A == w.B)
+            return Entity.Null;
+
+        if (!CanPlaceWireEndpoint(w.A, new HashSet<Entity>()) || !CanPlaceWireEndpoint(w.B, new HashSet<Entity>()))
+            return Entity.Null;
 
         return _entities.Create(w);
     }
@@ -498,6 +598,97 @@ public class Simulation
     public void SetupWireNode(Point p, Entity node)
     {
         _wireMap[checked((ushort)(p.X + p.Y * Width))].LazyInit().PushRef() = node;
+    }
+
+    internal SimulationSnapshot CreateSnapshot()
+    {
+        return new SimulationSnapshot(
+            ComponentEntities()
+                .Select(e =>
+                {
+                    ComponentData data = e.Get<ComponentData>();
+                    return new ComponentSnapshot(
+                        data.Blueprint,
+                        data.Position,
+                        data.Blueprint.Rotation,
+                        data.Deletable,
+                        data.InputOutputId,
+                        data.Blueprint.Descriptor is Blueprint.IntrinsicBlueprint.Switch ? data.Blueprint.SwitchValue.On : false);
+                })
+                .ToArray(),
+            WireEntities()
+                .Select(e => e.Get<Wire>())
+                .Select(w => new WireSnapshot(w.A, w.B, w.Kind))
+                .ToArray());
+    }
+
+    internal void RestoreSnapshot(SimulationSnapshot snapshot)
+    {
+        foreach (Entity wire in WireEntities())
+            if (wire.IsAlive)
+                wire.Delete();
+
+        foreach (Entity component in ComponentEntities())
+            if (component.IsAlive)
+                component.Delete();
+
+        foreach (var component in snapshot.Components)
+        {
+            Place(component.Blueprint, component.Position, component.Rotation, component.AllowDelete, component.InputOutputId, component.SwitchState);
+        }
+
+        foreach (var wire in snapshot.Wires)
+        {
+            CreateWire(new Wire(wire.A, wire.B, wire.Kind));
+        }
+    }
+
+    private bool CanPlaceWireEndpoint(Point position, IReadOnlySet<Entity> movingComponents)
+    {
+        if (!InRange(position))
+            return false;
+
+        Tile tile = this[position];
+        return tile.Kind is not TileKind.Component || movingComponents.Contains(tile.Meta);
+    }
+
+    private Entity[] ComponentEntities()
+    {
+        List<Entity> entities = [];
+        foreach (var entity in Components.EnumerateWithEntities())
+            entities.Add(entity);
+        return entities.ToArray();
+    }
+
+    private Entity[] WireEntities()
+    {
+        List<Entity> entities = [];
+        foreach (var entity in Wires.EnumerateWithEntities())
+            entities.Add(entity);
+        return entities.ToArray();
+    }
+
+    private void RemoveWireNodes(Wire wire)
+    {
+        if (wire.ANode.IsAlive)
+        {
+            ushort aIndex = checked((ushort)(wire.A.X + wire.A.Y * Width));
+            _wireMap[aIndex].LazyInit().Remove(wire.ANode);
+            wire.ANode.Delete();
+        }
+
+        if (wire.BNode.IsAlive)
+        {
+            ushort bIndex = checked((ushort)(wire.B.X + wire.B.Y * Width));
+            _wireMap[bIndex].LazyInit().Remove(wire.BNode);
+            wire.BNode.Delete();
+        }
+    }
+
+    private void RebuildWireNodes(Entity wireEntity, ref Wire wire)
+    {
+        wire.ANode = wireEntity.World.Create(new GridPositioned(wire.A), new WireNode(wireEntity, wire.B));
+        wire.BNode = wireEntity.World.Create(new GridPositioned(wire.B), new WireNode(wireEntity, wire.A));
     }
 
     public void Draw(Graphics g, TickResult tickResult)
@@ -577,6 +768,7 @@ public class Simulation
 
         void Node(Point point, Vector2 a)
         {
+            //g.DrawStringCentered(point.ToString(), a);
             sb.DrawCircle(a, Constants.WireRad * 1.45f, color, outline, 4);
             Color thatGrayColor = new Color(64, 64, 64);
             if (InRange(wire.A))
@@ -629,3 +821,15 @@ public class Simulation
         }
     }
 }
+
+internal sealed record SimulationSnapshot(ComponentSnapshot[] Components, WireSnapshot[] Wires);
+
+internal sealed record ComponentSnapshot(
+    Blueprint Blueprint,
+    Point Position,
+    int Rotation,
+    bool AllowDelete,
+    int InputOutputId,
+    bool SwitchState);
+
+internal sealed record WireSnapshot(Point A, Point B, WireKind Kind);
