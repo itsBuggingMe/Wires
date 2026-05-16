@@ -123,6 +123,9 @@ public class Simulation
                     break;
                 }
             }
+
+            if (initialError is TickResult.Error)
+                break;
         }
 
         if (initialError is TickResult.Error)
@@ -151,12 +154,14 @@ public class Simulation
                     PowerState ib = PowerStateAt(component.GetInputPosition(1));
                     PowerState cin = PowerStateAt(component.GetInputPosition(2));
 
-                    // sum
-                    currentResult = 
-                        StartVisit(component.GetOutputPosition(0), tile.Meta, 
-                        (ia.On ^ ib.On ^ cin.On) ? PowerState.OnState : PowerState.OffState);
-                    currentResult =
-                        StartVisit(component.GetOutputPosition(1), tile.Meta,
+                    if (StartVisit(component.GetOutputPosition(0), tile.Meta,
+                        (ia.On ^ ib.On ^ cin.On) ? PowerState.OnState : PowerState.OffState) is TickResult.Error sumError)
+                    {
+                        currentResult = sumError;
+                        break;
+                    }
+
+                    currentResult = StartVisit(component.GetOutputPosition(1), tile.Meta,
                         ((ia.On && ib.On) || ((ia.On ^ ib.On) && cin.On)) ? PowerState.OnState : PowerState.OffState);
                     break;
                 case Blueprint.IntrinsicBlueprint.Splitter:
@@ -225,7 +230,11 @@ public class Simulation
 
                     for(int i = 0; i < 8; i++)
                     {
-                        currentResult = StartVisit(component.GetOutputPosition(i), tile.Meta, index == i ? PowerState.OnState : PowerState.OffState);
+                        if (StartVisit(component.GetOutputPosition(i), tile.Meta, index == i ? PowerState.OnState : PowerState.OffState) is TickResult.Error error)
+                        {
+                            currentResult = error;
+                            break;
+                        }
                     }
                     break;
                 case Blueprint.IntrinsicBlueprint.None:
@@ -248,7 +257,11 @@ public class Simulation
                         PowerState power = component.Blueprint.OutputBuffer(i);
                         Point outputPosition = component.GetOutputPosition(i);
 
-                        currentResult = StartVisit(component.GetOutputPosition(i), tile.Meta, power);
+                        if (StartVisit(outputPosition, tile.Meta, power) is TickResult.Error error)
+                        {
+                            currentResult = error;
+                            break;
+                        }
                     }
                     break;
                 // once we hit a delay component, we stop processing further
@@ -284,11 +297,6 @@ public class Simulation
         {
             ref Wire wire = ref wireNode.Wire.Get<Wire>();
 
-            if(wire.ANode.Get<GridPositioned>().Position == new Point(63, 57) || wire.BNode.Get<GridPositioned>().Position == new Point(63, 57))
-            {
-
-            }
-
             if (wire.PowerState == state && wire.LastVisitComponent == component)
                 return TickResult.SuccessInstance;
 
@@ -317,10 +325,6 @@ public class Simulation
                     else if (connectedWire.PowerState != state)
                         return new TickResult.ShortCircuit(wireNode.Wire, connectedWire.LastVisitComponent, component);
                 }
-
-                // TODO: this was passed by value before
-                // maybe bug
-                connectedWire.PowerState = state;
 
                 // copy power state to other wires
                 if(VisitWire(connection.Get<WireNode>(), component, state) is TickResult.Error err)

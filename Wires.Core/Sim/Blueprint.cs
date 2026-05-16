@@ -276,12 +276,17 @@ public class Blueprint
         {
             PowerState address = sim.PowerStateAt(Inputs[2] + pos);
             PowerState value = sim.PowerStateAt(Outputs[0] + pos);
-            string ramReadout = $"A:{address.Values:X2}\nV:{value.Values:X2}";
-            Vector2 readoutSize = g.Font.MeasureString(ramReadout);
 
-            g.SpriteBatchText.DrawString(g.Font, ramReadout, pos.ToVector2() * scale,
-                Color.White, rotation * MathHelper.PiOver2, readoutSize * 0.5f, 0.75f, default, default);
-            return;
+            DrawRamValue($" addr: \n   {address.Values:X2}", new(-1, 0));
+            DrawRamValue($" val: \n  {value.Values:X2}", new(1, -1));
+
+            void DrawRamValue(string text, Point offset)
+            {
+                Vector2 size = g.Font.MeasureString(text);
+                Vector2 position = (pos + Rotate(offset, rotation)).ToVector2() * scale;
+                g.SpriteBatchText.DrawString(g.Font, text, position,
+                    Color.White, rotation * MathHelper.PiOver2, size * 0.5f, 0.55f, default, default);
+            }
         }
 
         string textToDraw = Descriptor switch
