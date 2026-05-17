@@ -274,10 +274,11 @@ public class Blueprint
 
         if (Descriptor is IntrinsicBlueprint.RAM && sim is not null)
         {
-            PowerState address = sim.PowerStateAt(Inputs[2] + pos);
+            PowerState addressHi = sim.PowerStateAt(Inputs[2] + pos);
+            PowerState addressLo = sim.PowerStateAt(Inputs[3] + pos);
             PowerState value = sim.PowerStateAt(Outputs[0] + pos);
 
-            DrawRamValue($" addr: \n   {address.Values:X2}", new(-1, 0));
+            DrawRamValue($" addr: \n {addressHi.Values << 8 | addressLo.Values:X4}", new(-1, 0));
             DrawRamValue($" val: \n  {value.Values:X2}", new(1, -1));
 
             void DrawRamValue(string text, Point offset)
@@ -470,6 +471,7 @@ public class Blueprint
             (new Point(0, -2), TileKind.Input),
             (new Point(-2, -1), TileKind.Input),
             (new Point(-2, 0), TileKind.Input),
+            (new Point(-2, 1), TileKind.Input),
             (new Point(2, -1), TileKind.Output),
         ], nameof(RAM), IntrinsicBlueprint.RAM);
 

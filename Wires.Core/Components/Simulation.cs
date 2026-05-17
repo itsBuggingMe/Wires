@@ -190,10 +190,15 @@ public class Simulation
                     currentResult = StartVisit(component.GetOutputPosition(0), tile.Meta, outputState);
                     break;
                 case Blueprint.IntrinsicBlueprint.RAM:
+                    ushort combinedAddress = 
+                        (ushort)(PowerStateAt(component.GetInputPosition(2)).Values << 8
+                        | PowerStateAt(component.GetInputPosition(3)).Values);
+
                     var output = state.TickRam(
                         PowerStateAt(component.GetInputPosition(0)),
                         PowerStateAt(component.GetInputPosition(1)),
-                        PowerStateAt(component.GetInputPosition(2)));
+                        combinedAddress
+                        );
                     currentResult = StartVisit(component.GetOutputPosition(0), tile.Meta, output);
                     break;
                 case Blueprint.IntrinsicBlueprint.AND:
@@ -207,14 +212,14 @@ public class Simulation
 
                     PowerState outputPowerState = component.Blueprint.Descriptor switch
                     {
-                        Blueprint.IntrinsicBlueprint.AND =>     (a.On & b.On),
-                        Blueprint.IntrinsicBlueprint.NAND =>   !(a.On & b.On),
-                        Blueprint.IntrinsicBlueprint.OR =>      (a.On | b.On),
-                        Blueprint.IntrinsicBlueprint.NOR =>    !(a.On | b.On),
-                        Blueprint.IntrinsicBlueprint.XOR =>     (a.On ^ b.On),
-                        Blueprint.IntrinsicBlueprint.XNOR =>   !(a.On ^ b.On),
+                        Blueprint.IntrinsicBlueprint.AND =>    new((byte)(a.Values & b.Values)),
+                        Blueprint.IntrinsicBlueprint.OR =>     new((byte)(a.Values | b.Values)),
+                        Blueprint.IntrinsicBlueprint.XOR =>    new((byte)(a.Values ^ b.Values)),
+                        Blueprint.IntrinsicBlueprint.NAND =>   !(a.On && b.On) ? PowerState.OnState : PowerState.OffState,
+                        Blueprint.IntrinsicBlueprint.NOR =>    !(a.On || b.On) ? PowerState.OnState : PowerState.OffState,
+                        Blueprint.IntrinsicBlueprint.XNOR =>   !(a.On ^ b.On) ? PowerState.OnState : PowerState.OffState,
                         _ => throw new UnreachableException()
-                    } ? PowerState.OnState : PowerState.OffState;
+                    };
 
                     currentResult = StartVisit(component.GetOutputPosition(0), tile.Meta, outputPowerState);
                     break;
