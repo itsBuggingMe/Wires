@@ -94,7 +94,7 @@ internal class TextInput : BorderedElement
         }
     }
 
-    private static readonly ImmutableArray<(Keys Key, char Char)> CharMap =
+    public static readonly ImmutableArray<(Keys Key, char Char)> CharMap =
     [
         (Keys.A , 'a'),
         (Keys.B , 'b'),

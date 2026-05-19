@@ -38,6 +38,7 @@ public class Simulation
 
     public Query Wires => _entities.Query<Wire>();
     public Query Components => _entities.Query<ComponentData>();
+    public List<SimulationComment> Comments { get; } = [];
 
     private Dictionary<Point, PowerState> _outputs = [];
 
@@ -228,6 +229,20 @@ public class Simulation
                     currentResult = StartVisit(component.GetOutputPosition(0), tile.Meta, a1.On ? PowerState.OffState : PowerState.OnState);
                     break;
                 case Blueprint.IntrinsicBlueprint.DEC8:
+                    if(PowerStateAt(component.GetInputPosition(3)).Off)
+                    {// not enabled
+                        for (int i = 0; i < 8; i++)
+                        {
+                            if (StartVisit(component.GetOutputPosition(i), tile.Meta, PowerState.OffState) is TickResult.Error error)
+                            {
+                                currentResult = error;
+                                break;
+                            }
+                        }
+
+                        break;
+                    }
+
                     int index = 
                         (PowerStateAt(component.GetInputPosition(0)).On ? 0b001 : 0) |
                         (PowerStateAt(component.GetInputPosition(1)).On ? 0b010 : 0) |
@@ -489,6 +504,138 @@ public class Simulation
         return true;
     }
 
+    public bool RotateMany(IReadOnlyCollection<Entity> components, IReadOnlyCollection<(Entity Id, bool IsA)> wireNodes)
+    {
+        HashSet<Entity> componentSet = components.Where(c => c.IsAlive).ToHashSet();
+        Dictionary<Entity, (bool MoveA, bool MoveB)> wireMoves = [];
+
+        foreach (var (wireId, isA) in wireNodes)
+        {
+            if (!wireId.IsAlive)
+                continue;
+
+            if (!wireMoves.TryGetValue(wireId, out var move))
+                move = default;
+
+            move = isA ? (true, move.MoveB) : (move.MoveA, true);
+            wireMoves[wireId] = move;
+        }
+
+        if (componentSet.Count == 0 && wireMoves.Count == 0)
+            return false;
+
+        Point center = SelectionCenter(componentSet, wireMoves);
+        Dictionary<Entity, (Point Position, Blueprint Blueprint)> componentRotations = [];
+        Dictionary<Entity, (Point A, Point B)> wireRotations = [];
+        HashSet<Point> occupiedDestinations = [];
+
+        foreach (Entity component in componentSet)
+        {
+            ref ComponentData data = ref component.Get<ComponentData>();
+            Blueprint rotatedBlueprint = data.Blueprint.Clone(data.Blueprint.Rotation + 1);
+            Point rotatedPosition = RotateClockwise(data.Position, center);
+
+            foreach ((Point offset, _) in rotatedBlueprint.Display)
+            {
+                Point destination = rotatedPosition + offset;
+                if (!InRange(destination))
+                    return false;
+
+                Tile destinationTile = this[destination];
+                if (destinationTile.Kind is not TileKind.Nothing && !componentSet.Contains(destinationTile.Meta))
+                    return false;
+
+                if (!occupiedDestinations.Add(destination))
+                    return false;
+            }
+
+            componentRotations[component] = (rotatedPosition, rotatedBlueprint);
+        }
+
+        foreach (var (wireId, move) in wireMoves)
+        {
+            ref Wire wire = ref wireId.Get<Wire>();
+            Point destinationA = move.MoveA ? RotateClockwise(wire.A, center) : wire.A;
+            Point destinationB = move.MoveB ? RotateClockwise(wire.B, center) : wire.B;
+
+            if (!CanPlaceWireEndpoint(destinationA, componentSet) ||
+                !CanPlaceWireEndpoint(destinationB, componentSet) ||
+                destinationA == destinationB)
+            {
+                return false;
+            }
+
+            wireRotations[wireId] = (destinationA, destinationB);
+        }
+
+        foreach (Entity component in componentSet)
+        {
+            ref ComponentData data = ref component.Get<ComponentData>();
+            foreach ((Point offset, _) in data.Blueprint.Display)
+                this[data.Position + offset] = default;
+        }
+
+        foreach (var (component, rotation) in componentRotations)
+        {
+            ref ComponentData data = ref component.Get<ComponentData>();
+            data.Position = rotation.Position;
+            data.Blueprint = rotation.Blueprint;
+
+            foreach ((Point offset, TileKind kind) in data.Blueprint.Display)
+                this[data.Position + offset] = new Tile { Kind = kind, Meta = component };
+        }
+
+        foreach (var (wireId, rotation) in wireRotations)
+        {
+            ref Wire wire = ref wireId.Get<Wire>();
+            RemoveWireNodes(wire);
+            wire.A = rotation.A;
+            wire.B = rotation.B;
+            RebuildWireNodes(wireId, ref wire);
+        }
+
+        return true;
+
+        static Point RotateClockwise(Point point, Point center)
+        {
+            Point delta = point - center;
+            return center + new Point(-delta.Y, delta.X);
+        }
+    }
+
+    private static Point SelectionCenter(IReadOnlyCollection<Entity> components, Dictionary<Entity, (bool MoveA, bool MoveB)> wireMoves)
+    {
+        Point min = new(int.MaxValue, int.MaxValue);
+        Point max = new(int.MinValue, int.MinValue);
+
+        foreach (Entity component in components)
+        {
+            ref ComponentData data = ref component.Get<ComponentData>();
+            foreach ((Point offset, _) in data.Blueprint.Display)
+            {
+                Point tile = data.Position + offset;
+                Include(tile);
+            }
+        }
+
+        foreach (var (wireId, move) in wireMoves)
+        {
+            ref Wire wire = ref wireId.Get<Wire>();
+            if (move.MoveA)
+                Include(wire.A);
+            if (move.MoveB)
+                Include(wire.B);
+        }
+
+        return (min + max) / new Point(2);
+
+        void Include(Point point)
+        {
+            min = new Point(int.Min(min.X, point.X), int.Min(min.Y, point.Y));
+            max = new Point(int.Max(max.X, point.X), int.Max(max.Y, point.Y));
+        }
+    }
+
     readonly record struct WorkItem(Point Position, PowerState State);
 
     public Span<Entity> WiresAt(Point position)
@@ -505,6 +652,36 @@ public class Simulation
             return wire;
         }
         return Entity.Null;
+    }
+
+    public Entity WireAtPath(Vector2 tilePosition, float maxDistance = 0.5f)
+    {
+        Entity closestWire = Entity.Null;
+        float closestDistanceSquared = maxDistance * maxDistance;
+
+        foreach (var (entity, wireRef) in Wires.EnumerateWithEntities<Wire>())
+        {
+            ref Wire wire = ref wireRef.Value;
+            Vector2 a = wire.A.ToVector2();
+            Vector2 b = wire.B.ToVector2();
+            Vector2 segment = b - a;
+            float lengthSquared = segment.LengthSquared();
+
+            if (lengthSquared == 0)
+                continue;
+
+            float t = Vector2.Dot(tilePosition - a, segment) / lengthSquared;
+            t = MathHelper.Clamp(t, 0, 1);
+
+            float distanceSquared = Vector2.DistanceSquared(tilePosition, a + segment * t);
+            if (distanceSquared <= closestDistanceSquared)
+            {
+                closestDistanceSquared = distanceSquared;
+                closestWire = entity;
+            }
+        }
+
+        return closestWire;
     }
 
     public PowerState PowerStateAt(Point position)
@@ -604,6 +781,89 @@ public class Simulation
         return _entities.Create(w);
     }
 
+    public bool SplitWireAt(Entity wireEntity, Point position)
+    {
+        if (!wireEntity.IsAlive || !InRange(position))
+            return false;
+
+        ref Wire wire = ref wireEntity.Get<Wire>();
+        bool horizontal = wire.A.Y == wire.B.Y && position.Y == wire.A.Y;
+        bool vertical = wire.A.X == wire.B.X && position.X == wire.A.X;
+
+        if (!horizontal && !vertical)
+            return false;
+
+        if (position == wire.A || position == wire.B)
+            return false;
+
+        if (horizontal && !Between(position.X, wire.A.X, wire.B.X))
+            return false;
+
+        if (vertical && !Between(position.Y, wire.A.Y, wire.B.Y))
+            return false;
+
+        if (!CanPlaceWireEndpoint(position, new HashSet<Entity>()))
+            return false;
+
+        Wire first = new(wire.A, position, wire.Kind);
+        Wire second = new(position, wire.B, wire.Kind);
+        wireEntity.Delete();
+        CreateWire(first);
+        CreateWire(second);
+        return true;
+
+        static bool Between(int value, int a, int b)
+        {
+            return value > int.Min(a, b) && value < int.Max(a, b);
+        }
+    }
+
+    public bool MergeWiresAt(Point position)
+    {
+        if (!InRange(position) || this[position].Kind is not TileKind.Nothing)
+            return false;
+
+        Span<Entity> nodes = WiresAt(position);
+        if (nodes.Length != 2)
+            return false;
+
+        Entity firstWireEntity = nodes[0].Get<WireNode>().Wire;
+        Entity secondWireEntity = nodes[1].Get<WireNode>().Wire;
+
+        if (!firstWireEntity.IsAlive || !secondWireEntity.IsAlive || firstWireEntity == secondWireEntity)
+            return false;
+
+        ref Wire firstWire = ref firstWireEntity.Get<Wire>();
+        ref Wire secondWire = ref secondWireEntity.Get<Wire>();
+
+        if (firstWire.Kind != secondWire.Kind)
+            return false;
+
+        Point firstEndpoint = OtherEndpoint(firstWire, position);
+        Point secondEndpoint = OtherEndpoint(secondWire, position);
+        bool horizontal = firstEndpoint.Y == position.Y && secondEndpoint.Y == position.Y;
+        bool vertical = firstEndpoint.X == position.X && secondEndpoint.X == position.X;
+
+        if (firstEndpoint == secondEndpoint ||
+            (!horizontal && !vertical) ||
+            !CanPlaceWireEndpoint(firstEndpoint, new HashSet<Entity>()) ||
+            !CanPlaceWireEndpoint(secondEndpoint, new HashSet<Entity>()))
+        {
+            return false;
+        }
+
+        Wire mergedWire = new(firstEndpoint, secondEndpoint, firstWire.Kind);
+        firstWireEntity.Delete();
+        secondWireEntity.Delete();
+        CreateWire(mergedWire);
+        return true;
+
+        static Point OtherEndpoint(Wire wire, Point sharedEndpoint)
+        {
+            return wire.A == sharedEndpoint ? wire.B : wire.A;
+        }
+    }
+
     public void SetupWireNode(Point p, Entity node)
     {
         _wireMap[checked((ushort)(p.X + p.Y * Width))].LazyInit().PushRef() = node;
@@ -628,11 +888,16 @@ public class Simulation
             WireEntities()
                 .Select(e => e.Get<Wire>())
                 .Select(w => new WireSnapshot(w.A, w.B, w.Kind))
+                .ToArray(),
+            Comments
+                .Select(c => new CommentSnapshot(c.Position, c.Text))
                 .ToArray());
     }
 
     internal void RestoreSnapshot(SimulationSnapshot snapshot)
     {
+        Comments.Clear();
+
         foreach (Entity wire in WireEntities())
             if (wire.IsAlive)
                 wire.Delete();
@@ -649,6 +914,11 @@ public class Simulation
         foreach (var wire in snapshot.Wires)
         {
             CreateWire(new Wire(wire.A, wire.B, wire.Kind));
+        }
+
+        foreach (var comment in snapshot.Comments)
+        {
+            Comments.Add(new SimulationComment(comment.Position, comment.Text));
         }
     }
 
@@ -831,7 +1101,13 @@ public class Simulation
     }
 }
 
-internal sealed record SimulationSnapshot(ComponentSnapshot[] Components, WireSnapshot[] Wires);
+public sealed class SimulationComment(Point position, string text = "")
+{
+    public Point Position { get; set; } = position;
+    public string Text { get; set; } = text;
+}
+
+internal sealed record SimulationSnapshot(ComponentSnapshot[] Components, WireSnapshot[] Wires, CommentSnapshot[] Comments);
 
 internal sealed record ComponentSnapshot(
     Blueprint Blueprint,
@@ -842,3 +1118,5 @@ internal sealed record ComponentSnapshot(
     bool SwitchState);
 
 internal sealed record WireSnapshot(Point A, Point B, WireKind Kind);
+
+internal sealed record CommentSnapshot(Point Position, string Text);

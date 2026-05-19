@@ -1,5 +1,6 @@
 ﻿using Frent;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Paper.Core;
 using System;
@@ -12,6 +13,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Wires.Core.Components.Stateful;
 using Wires.Core.Sim.Components;
+using Wires.Core.UI;
 
 namespace Wires.Core.Sim;
 
@@ -34,6 +36,8 @@ internal class SimInteraction
     private readonly Stack<SimulationSnapshot> _undoStack = [];
     private readonly Stack<SimulationSnapshot> _redoStack = [];
     private bool _dragUndoCaptured;
+    private SimulationComment? _activeComment;
+    private int _commentFrames;
 
     public TickResult? TickResult { get; private set; }
 
@@ -88,6 +92,33 @@ internal class SimInteraction
             {
                 Redo(sim);
                 return;
+            }
+
+            if (controlDown && Keys.N.RisingEdge())
+            {
+                RecordUndo(sim);
+                _activeComment = new SimulationComment(tileOver);
+                sim.Comments.Add(_activeComment);
+                SimulationChanged?.Invoke();
+                return;
+            }
+
+            if (MouseButton.Left.RisingEdge() && CommentAt(sim, tileOver) is { } clickedComment)
+            {
+                _activeComment = clickedComment;
+                return;
+            }
+
+            if (_activeComment is not null)
+            {
+                if (UpdateActiveComment(sim, controlDown))
+                    return;
+
+                if (MouseButton.Left.RisingEdge())
+                {
+                    _activeComment = null;
+                    return;
+                }
             }
 
             if (Keys.LeftShift.Down() && MouseButton.Left.RisingEdge() && _selectRectangle is null)
@@ -186,6 +217,21 @@ internal class SimInteraction
                 return;
             }
 
+            if (_groupSelection is { } rotateSelection && Keys.R.RisingEdge())
+            {
+                RecordUndo(sim);
+                if (sim.RotateMany(rotateSelection.Components, rotateSelection.WireNodes))
+                {
+                    Step(clearSelection: false);
+                    SimulationChanged?.Invoke();
+                }
+                else
+                {
+                    DropUndo();
+                }
+                return;
+            }
+
             if (_groupSelection is { } selection && MouseButton.Left.RisingEdge() && _selectionDragPrev is null && IsSelectionHandle(selection, tileOver))
             {
                 _selectionDragPrev = tileOver;
@@ -212,6 +258,24 @@ internal class SimInteraction
             }
 
             // placing wires
+            if (InputHelper.RisingEdge(MouseButton.Left) && sim.InRange(tileOver) && sim[tileOver] is { Kind: TileKind.Nothing } && !sim.HasWiresAt(tileOver) && sim.WireAtPath(GetTileOverVec2()) is { IsAlive: true } wireToSplit)
+            {
+                RecordUndo(sim);
+                if (sim.SplitWireAt(wireToSplit, tileOver))
+                {
+                    _wireDragStart = tileOver;
+                    _wireDragCurrent = tileOver;
+                    _currentPlacedIsBundle = false;
+                    Step();
+                    SimulationChanged?.Invoke();
+                }
+                else
+                {
+                    DropUndo();
+                }
+                return;
+            }
+
             if ((InputHelper.RisingEdge(MouseButton.Left) || InputHelper.RisingEdge(MouseButton.Right)) && sim.InRange(tileOver) && (sim[tileOver] is { Kind: TileKind.Input or TileKind.Output } || sim.HasWiresAt(tileOver)))
             {
                 _wireDragStart = tileOver;
@@ -280,7 +344,22 @@ internal class SimInteraction
                 if (sim.WireNodeAt(tileOver) is { IsAlive: true } wire)
                 {
                     RecordUndo(sim);
-                    wire.Get<WireNode>().Wire.Delete();
+                    if (sim.MergeWiresAt(tileOver))
+                    {
+                        SimulationChanged?.Invoke();
+                        Step();
+                    }
+                    else
+                    {
+                        wire.Get<WireNode>().Wire.Delete();
+                        SimulationChanged?.Invoke();
+                        Step();
+                    }
+                }
+                else if (sim.WireAtPath(GetTileOverVec2()) is { IsAlive: true } wireOnPath)
+                {
+                    RecordUndo(sim);
+                    wireOnPath.Delete();
                     SimulationChanged?.Invoke();
                     Step();
                 }
@@ -459,6 +538,7 @@ internal class SimInteraction
         simulation.RestoreSnapshot(_undoStack.Pop());
         _groupSelection = null;
         _selectionDragPrev = null;
+        _activeComment = null;
         Step();
         SimulationChanged?.Invoke();
     }
@@ -472,6 +552,7 @@ internal class SimInteraction
         simulation.RestoreSnapshot(_redoStack.Pop());
         _groupSelection = null;
         _selectionDragPrev = null;
+        _activeComment = null;
         Step();
         SimulationChanged?.Invoke();
     }
@@ -521,6 +602,7 @@ internal class SimInteraction
         _draggedComponentId = default;
         _activeDragDrop = default;
         _rotation = default;
+        _activeComment = null;
     }
 
     public void BeginPlaceComponent(ComponentEntry componentEntry)
@@ -532,6 +614,8 @@ internal class SimInteraction
     {
         if (ActiveSim is null)
             return;
+
+        DrawComments(ActiveSim);
 
         if (_activeDragDrop is not null)
         {
@@ -573,6 +657,97 @@ internal class SimInteraction
         }
     }
     private Point GetTileOver() => ((_camera.ScreenToWorld(InputHelper.MouseLocation.ToVector2()) - new Vector2(-Constants.Scale / 2)) / new Vector2(Constants.Scale)).ToPoint();
+    private Vector2 GetTileOverVec2() => _camera.ScreenToWorld(InputHelper.MouseLocation.ToVector2()) / Constants.Scale;
+
+    private bool UpdateActiveComment(Simulation sim, bool controlDown)
+    {
+        if (_activeComment is null)
+            return false;
+
+        SimulationComment activeComment = _activeComment;
+
+        if (Keys.Escape.RisingEdge() || Keys.Enter.RisingEdge())
+        {
+            _activeComment = null;
+            return true;
+        }
+
+        if (Keys.Delete.RisingEdge())
+        {
+            RecordUndo(sim);
+            sim.Comments.Remove(activeComment);
+            _activeComment = null;
+            SimulationChanged?.Invoke();
+            return true;
+        }
+
+        if (Keys.Back.RisingEdge() && activeComment.Text.Length > 0)
+        {
+            RecordUndo(sim);
+            activeComment.Text = activeComment.Text[..^1];
+            SimulationChanged?.Invoke();
+            return true;
+        }
+
+        if (controlDown)
+            return false;
+
+        foreach (var (key, character) in TextInput.CharMap)
+        {
+            if (!key.RisingEdge())
+                continue;
+
+            RecordUndo(sim);
+            char toAppend = character;
+            if (char.IsAsciiLetter(toAppend) && (Keys.LeftShift.Down() || Keys.RightShift.Down()))
+                toAppend = char.ToUpperInvariant(toAppend);
+
+            activeComment.Text += toAppend;
+            SimulationChanged?.Invoke();
+            return true;
+        }
+
+        return false;
+    }
+
+    private void DrawComments(Simulation sim)
+    {
+        _commentFrames++;
+        Texture2D texture = _graphics.Content.Load<Texture2D>("comment");
+
+        foreach (SimulationComment comment in sim.Comments)
+        {
+            Vector2 position = comment.Position.ToVector2() * Constants.Scale;
+            Vector2 origin = texture.Bounds.Size.ToVector2() * 0.5f;
+            float textureScale = Constants.Scale / MathF.Max(texture.Width, texture.Height);
+            Color color = comment == _activeComment ? Color.White : Color.White * 0.85f;
+            bool hovered = comment.Position == GetTileOver();
+
+            _graphics.SpriteBatch.Draw(texture, position, null, color, 0, origin, textureScale, SpriteEffects.None, 0);
+
+            if (!hovered)
+                continue;
+
+            string text = comment.Text;
+            if (comment == _activeComment && (_commentFrames & 63) < 32)
+                text += "|";
+
+            if (text.Length > 0)
+                _graphics.DrawString(text, position + new Vector2(Constants.Scale * 0.55f, -Constants.Scale * 0.25f), scale: 0.8f);
+        }
+    }
+
+    private static SimulationComment? CommentAt(Simulation sim, Point tile)
+    {
+        for (int i = sim.Comments.Count - 1; i >= 0; i--)
+        {
+            if (sim.Comments[i].Position == tile)
+                return sim.Comments[i];
+        }
+
+        return null;
+    }
+
     static Rectangle NormalizeRect(Rectangle r)
     {
         int x = r.Width < 0 ? r.X + r.Width : r.X;

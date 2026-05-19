@@ -448,6 +448,7 @@ public class Blueprint
             (new Point(-1, -4), TileKind.Input),
             (new Point(-1, -3), TileKind.Input),
             (new Point(-1, -2), TileKind.Input),
+            (new Point(0, -5), TileKind.Input),
             (new Point(1, -4), TileKind.Output),
             (new Point(1, -3), TileKind.Output),
             (new Point(1, -2), TileKind.Output),

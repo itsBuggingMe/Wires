@@ -64,6 +64,7 @@ internal class LevelModel
     public required ComponentTileModel[] ComponentTiles { get; init; }
     public required TestCaseModel[] TestCases { get; init; }
     public WireModel[]? Wires { get; init; }
+    public CommentModel[] Comments { get; set; } = [];
 }
 
 internal class ComponentTileModel
@@ -97,4 +98,11 @@ internal class WireModel
     public int BX { get; init; }
     public int BY { get; init; }
     public bool IsBundle { get; init; }
+}
+
+internal class CommentModel
+{
+    public int X { get; init; }
+    public int Y { get; init; }
+    public required string Text { get; init; }
 }

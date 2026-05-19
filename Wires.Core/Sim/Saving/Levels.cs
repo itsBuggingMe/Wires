@@ -53,6 +53,7 @@ internal static class Levels
 
     private static PowerState On => PowerState.OnState;
     private static PowerState Off => PowerState.OffState;
+    private const string CommentSectionMarker = "WiresComments1";
 
 
 
@@ -174,6 +175,18 @@ internal static class Levels
                 br.Write(wireModel.IsBundle);
             }
         }
+
+        br.Write(CommentSectionMarker);
+        foreach(var model in models)
+        {
+            br.Write7BitEncodedInt(model.Comments.Length);
+            foreach(var comment in model.Comments)
+            {
+                br.Write7BitEncodedInt(comment.X);
+                br.Write7BitEncodedInt(comment.Y);
+                br.Write(comment.Text);
+            }
+        }
     }
 
     public static LevelModel[] ReadBinaryFormatModels(Stream inputStream)
@@ -268,6 +281,27 @@ internal static class Levels
             };
         }
 
+        if (inputStream.Position < inputStream.Length && br.ReadString() == CommentSectionMarker)
+        {
+            foreach (LevelModel model in models)
+            {
+                int commentCount = br.Read7BitEncodedInt();
+                CommentModel[] comments = new CommentModel[commentCount];
+
+                for (int i = 0; i < commentCount; i++)
+                {
+                    comments[i] = new CommentModel
+                    {
+                        X = br.Read7BitEncodedInt(),
+                        Y = br.Read7BitEncodedInt(),
+                        Text = br.ReadString(),
+                    };
+                }
+
+                model.Comments = comments;
+            }
+        }
+
         return models;
     }
 
@@ -315,6 +349,11 @@ internal static class Levels
                     _ => existingEntries.FirstOrDefault(m => m.Name == component.BlueprintName)?.Blueprint ??
                         throw new System.Exception($"Could not find blueprint of name: {component.BlueprintName}")
                 }, new(component.X, component.Y), component.Rotation, component.AllowDelete, component.InputOutputId ?? 0, component.SwcState ?? false);
+            }
+
+            foreach (var comment in model.Comments)
+            {
+                simulation.Comments.Add(new SimulationComment(new(comment.X, comment.Y), comment.Text));
             }
         }
 
@@ -369,6 +408,14 @@ internal static class Levels
                         BX = w.B.X,
                         BY = w.B.Y,
                         IsBundle = w.Kind == WireKind.Byte,
+                    })
+                    .ToArray(),
+                Comments = c.Custom!.Comments
+                    .Select(comment => new CommentModel
+                    {
+                        X = comment.Position.X,
+                        Y = comment.Position.Y,
+                        Text = comment.Text,
                     })
                     .ToArray(),
             })
