@@ -36,7 +36,7 @@ internal class SimInteraction
     private readonly Stack<SimulationSnapshot> _undoStack = [];
     private readonly Stack<SimulationSnapshot> _redoStack = [];
     private bool _dragUndoCaptured;
-    private SimulationComment? _activeComment;
+    private Entity _activeComment = Entity.Null;
     private int _commentFrames;
 
     public TickResult? TickResult { get; private set; }
@@ -97,26 +97,19 @@ internal class SimInteraction
             if (controlDown && Keys.N.RisingEdge())
             {
                 RecordUndo(sim);
-                _activeComment = new SimulationComment(tileOver);
-                sim.Comments.Add(_activeComment);
+                _activeComment = sim.CreateComment(tileOver);
                 SimulationChanged?.Invoke();
                 return;
             }
 
-            if (MouseButton.Left.RisingEdge() && CommentAt(sim, tileOver) is { } clickedComment)
-            {
-                _activeComment = clickedComment;
-                return;
-            }
-
-            if (_activeComment is not null)
+            if (_activeComment.IsAlive)
             {
                 if (UpdateActiveComment(sim, controlDown))
                     return;
 
                 if (MouseButton.Left.RisingEdge())
                 {
-                    _activeComment = null;
+                    _activeComment = Entity.Null;
                     return;
                 }
             }
@@ -153,6 +146,12 @@ internal class SimInteraction
                             _groupSelection.WireNodes.Add((wireId, true));
                         if (TileCenterInSelection(bounds, wire.B))
                             _groupSelection.WireNodes.Add((wireId, false));
+                    }
+
+                    foreach (Entity comment in sim.Comments.EnumerateWithEntities())
+                    {
+                        if (TileCenterInSelection(bounds, comment.Get<GridPositioned>().Position))
+                            _groupSelection.TilePositions.Add(comment);
                     }
                     return;
                 }
@@ -248,12 +247,18 @@ internal class SimInteraction
                 }
 
                 Point delta = tileOver - previousTile;
-                if (delta != default && sim.MoveMany(activeSelection.Components, activeSelection.WireNodes, delta))
+                if (delta != default && sim.MoveMany(activeSelection.Components, activeSelection.WireNodes, activeSelection.TilePositions, delta))
                 {
                     _selectionDragPrev = tileOver;
                     Step(clearSelection: false);
                     SimulationChanged?.Invoke();
                 }
+                return;
+            }
+
+            if (MouseButton.Left.RisingEdge() && CommentAt(sim, tileOver) is { IsAlive: true } clickedComment)
+            {
+                _activeComment = clickedComment;
                 return;
             }
 
@@ -399,6 +404,12 @@ internal class SimInteraction
                         wireId.Delete();
                 }
 
+                foreach (Entity tilePosition in _groupSelection.TilePositions)
+                {
+                    if (tilePosition.IsAlive)
+                        tilePosition.Delete();
+                }
+
                 _groupSelection = null;
                 _selectionDragPrev = null;
                 _selectRectangle = null;
@@ -514,6 +525,12 @@ internal class SimInteraction
                 return true;
         }
 
+        foreach (Entity tilePosition in selection.TilePositions)
+        {
+            if (tilePosition.IsAlive && tilePosition.Get<GridPositioned>().Position == tile)
+                return true;
+        }
+
         return false;
     }
 
@@ -538,7 +555,7 @@ internal class SimInteraction
         simulation.RestoreSnapshot(_undoStack.Pop());
         _groupSelection = null;
         _selectionDragPrev = null;
-        _activeComment = null;
+        _activeComment = Entity.Null;
         Step();
         SimulationChanged?.Invoke();
     }
@@ -552,7 +569,7 @@ internal class SimInteraction
         simulation.RestoreSnapshot(_redoStack.Pop());
         _groupSelection = null;
         _selectionDragPrev = null;
-        _activeComment = null;
+        _activeComment = Entity.Null;
         Step();
         SimulationChanged?.Invoke();
     }
@@ -602,7 +619,7 @@ internal class SimInteraction
         _draggedComponentId = default;
         _activeDragDrop = default;
         _rotation = default;
-        _activeComment = null;
+        _activeComment = Entity.Null;
     }
 
     public void BeginPlaceComponent(ComponentEntry componentEntry)
@@ -654,6 +671,12 @@ internal class SimInteraction
 
                 _graphics.ShapeBatch.DrawCircle(pos.ToVector2() * Constants.Scale, 20, Color.Transparent, Color.LightBlue * 0.5f, 2);
             }
+
+            foreach (Entity tilePosition in selection.TilePositions)
+            {
+                if (tilePosition.IsAlive)
+                    _graphics.ShapeBatch.DrawCircle(tilePosition.Get<GridPositioned>().Position.ToVector2() * Constants.Scale, 28, Color.Transparent, Color.LightGreen * 0.5f, 2);
+            }
         }
     }
     private Point GetTileOver() => ((_camera.ScreenToWorld(InputHelper.MouseLocation.ToVector2()) - new Vector2(-Constants.Scale / 2)) / new Vector2(Constants.Scale)).ToPoint();
@@ -661,30 +684,32 @@ internal class SimInteraction
 
     private bool UpdateActiveComment(Simulation sim, bool controlDown)
     {
-        if (_activeComment is null)
+        if (!_activeComment.IsAlive)
             return false;
 
-        SimulationComment activeComment = _activeComment;
+        Entity activeComment = _activeComment;
 
         if (Keys.Escape.RisingEdge() || Keys.Enter.RisingEdge())
         {
-            _activeComment = null;
+            _activeComment = Entity.Null;
             return true;
         }
 
         if (Keys.Delete.RisingEdge())
         {
             RecordUndo(sim);
-            sim.Comments.Remove(activeComment);
-            _activeComment = null;
+            activeComment.Delete();
+            _activeComment = Entity.Null;
             SimulationChanged?.Invoke();
             return true;
         }
 
-        if (Keys.Back.RisingEdge() && activeComment.Text.Length > 0)
+        ref CommentText text = ref activeComment.Get<CommentText>();
+
+        if (Keys.Back.RisingEdge() && text.Text.Length > 0)
         {
             RecordUndo(sim);
-            activeComment.Text = activeComment.Text[..^1];
+            text.Text = text.Text[..^1];
             SimulationChanged?.Invoke();
             return true;
         }
@@ -702,7 +727,7 @@ internal class SimInteraction
             if (char.IsAsciiLetter(toAppend) && (Keys.LeftShift.Down() || Keys.RightShift.Down()))
                 toAppend = char.ToUpperInvariant(toAppend);
 
-            activeComment.Text += toAppend;
+            text.Text += toAppend;
             SimulationChanged?.Invoke();
             return true;
         }
@@ -713,22 +738,22 @@ internal class SimInteraction
     private void DrawComments(Simulation sim)
     {
         _commentFrames++;
-        Texture2D texture = _graphics.Content.Load<Texture2D>("comment");
 
-        foreach (SimulationComment comment in sim.Comments)
+        foreach (var (comment, tilePos, commentText, sprite) in sim.Comments.EnumerateWithEntities<GridPositioned, CommentText, Sprite>())
         {
-            Vector2 position = comment.Position.ToVector2() * Constants.Scale;
+            Texture2D texture = _graphics.Content.Load<Texture2D>(sprite.Value.TextureName);
+            Vector2 position = tilePos.Value.Position.ToVector2() * Constants.Scale;
             Vector2 origin = texture.Bounds.Size.ToVector2() * 0.5f;
             float textureScale = Constants.Scale / MathF.Max(texture.Width, texture.Height);
             Color color = comment == _activeComment ? Color.White : Color.White * 0.85f;
-            bool hovered = comment.Position == GetTileOver();
+            bool hovered = tilePos.Value.Position == GetTileOver();
 
             _graphics.SpriteBatch.Draw(texture, position, null, color, 0, origin, textureScale, SpriteEffects.None, 0);
 
             if (!hovered)
                 continue;
 
-            string text = comment.Text;
+            string text = commentText.Value.Text;
             if (comment == _activeComment && (_commentFrames & 63) < 32)
                 text += "|";
 
@@ -737,15 +762,16 @@ internal class SimInteraction
         }
     }
 
-    private static SimulationComment? CommentAt(Simulation sim, Point tile)
+    private static Entity CommentAt(Simulation sim, Point tile)
     {
-        for (int i = sim.Comments.Count - 1; i >= 0; i--)
+        Entity result = Entity.Null;
+        foreach (Entity comment in sim.Comments.EnumerateWithEntities())
         {
-            if (sim.Comments[i].Position == tile)
-                return sim.Comments[i];
+            if (comment.Get<GridPositioned>().Position == tile)
+                result = comment;
         }
 
-        return null;
+        return result;
     }
 
     static Rectangle NormalizeRect(Rectangle r)
@@ -785,6 +811,7 @@ internal class SimInteraction
     {
         public List<Entity> Components { get; set; } = [];
         public List<(Entity Id, bool IsA)> WireNodes { get; set; } = [];
+        public List<Entity> TilePositions { get; set; } = [];
     }
 
     private class SelectionCopyData

@@ -16,10 +16,13 @@
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day3.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Campaigns\Day1.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Components\Simulation.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Components\Immutable\Sprite.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Components\Stateful\CommentText.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Components\Stateful\ComponentData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Constants.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Graphics.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Components\Immutable\GridPositioned.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\Blueprint.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\ComponenEntry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sim\GlobalStateTable.cs" />

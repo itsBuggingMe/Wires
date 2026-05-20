@@ -38,7 +38,7 @@ public class Simulation
 
     public Query Wires => _entities.Query<Wire>();
     public Query Components => _entities.Query<ComponentData>();
-    public List<SimulationComment> Comments { get; } = [];
+    public Query Comments => _entities.Query<CommentText>();
 
     private Dictionary<Point, PowerState> _outputs = [];
 
@@ -91,6 +91,7 @@ public class Simulation
                     Blueprint.IntrinsicBlueprint.Input => blueprint.InputBuffer(componentData.InputOutputId),
                     Blueprint.IntrinsicBlueprint.Delay => state[GlobalStateTable.CreateAddress(previousAddressHash, componentData.Position)],
                     Blueprint.IntrinsicBlueprint.Switch => componentData.Blueprint.SwitchValue,
+                    Blueprint.IntrinsicBlueprint.NOT => PowerState.OnState,
                     // investigate how I used to update dangling components
                     _ => null,  
                 };
@@ -423,7 +424,7 @@ public class Simulation
         return true;
     }
 
-    public bool MoveMany(IReadOnlyCollection<Entity> components, IReadOnlyCollection<(Entity Id, bool IsA)> wireNodes, Point delta)
+    public bool MoveMany(IReadOnlyCollection<Entity> components, IReadOnlyCollection<(Entity Id, bool IsA)> wireNodes, IReadOnlyCollection<Entity> tilePositions, Point delta)
     {
         if (delta == default)
             return true;
@@ -472,6 +473,16 @@ public class Simulation
             }
         }
 
+        foreach (Entity tilePosition in tilePositions)
+        {
+            if (!tilePosition.IsAlive)
+                continue;
+
+            Point destination = tilePosition.Get<GridPositioned>().Position + delta;
+            if (!InRange(destination))
+                return false;
+        }
+
         foreach (Entity component in componentSet)
         {
             ref ComponentData data = ref component.Get<ComponentData>();
@@ -499,6 +510,12 @@ public class Simulation
                 wire.B += delta;
 
             RebuildWireNodes(wireId, ref wire);
+        }
+
+        foreach (Entity tilePosition in tilePositions)
+        {
+            if (tilePosition.IsAlive)
+                tilePosition.Get<GridPositioned>().Position += delta;
         }
 
         return true;
@@ -872,7 +889,7 @@ public class Simulation
     internal SimulationSnapshot CreateSnapshot()
     {
         return new SimulationSnapshot(
-            ComponentEntities()
+            Components.ToEnumerable()
                 .Select(e =>
                 {
                     ComponentData data = e.Get<ComponentData>();
@@ -885,26 +902,33 @@ public class Simulation
                         data.Blueprint.Descriptor is Blueprint.IntrinsicBlueprint.Switch ? data.Blueprint.SwitchValue.On : false);
                 })
                 .ToArray(),
-            WireEntities()
+            Wires.ToEnumerable()
                 .Select(e => e.Get<Wire>())
                 .Select(w => new WireSnapshot(w.A, w.B, w.Kind))
                 .ToArray(),
-            Comments
-                .Select(c => new CommentSnapshot(c.Position, c.Text))
+            Comments.ToEnumerable()
+                .Select(e => new
+                {
+                    Text = e.Get<CommentText>(),
+                    Position = e.Get<GridPositioned>(),
+                })
+                .Select(c => new CommentSnapshot(c.Position.Position, c.Text.Text))
                 .ToArray());
     }
 
     internal void RestoreSnapshot(SimulationSnapshot snapshot)
     {
-        Comments.Clear();
-
-        foreach (Entity wire in WireEntities())
+        foreach (Entity wire in Wires.ToEnumerable())
             if (wire.IsAlive)
                 wire.Delete();
 
-        foreach (Entity component in ComponentEntities())
+        foreach (Entity component in Components.ToEnumerable())
             if (component.IsAlive)
                 component.Delete();
+
+        foreach (Entity comment in Comments.ToEnumerable())
+            if (comment.IsAlive)
+                comment.Delete();
 
         foreach (var component in snapshot.Components)
         {
@@ -918,8 +942,19 @@ public class Simulation
 
         foreach (var comment in snapshot.Comments)
         {
-            Comments.Add(new SimulationComment(comment.Position, comment.Text));
+            CreateComment(comment.Position, comment.Text);
         }
+    }
+
+    public Entity CreateComment(Point position, string text = "")
+    {
+        if (!InRange(position))
+            return Entity.Null;
+
+        return _entities.Create(
+            new GridPositioned(position),
+            new Sprite("comment"),
+            new CommentText(text));
     }
 
     private bool CanPlaceWireEndpoint(Point position, IReadOnlySet<Entity> movingComponents)
@@ -929,22 +964,6 @@ public class Simulation
 
         Tile tile = this[position];
         return tile.Kind is not TileKind.Component || movingComponents.Contains(tile.Meta);
-    }
-
-    private Entity[] ComponentEntities()
-    {
-        List<Entity> entities = [];
-        foreach (var entity in Components.EnumerateWithEntities())
-            entities.Add(entity);
-        return entities.ToArray();
-    }
-
-    private Entity[] WireEntities()
-    {
-        List<Entity> entities = [];
-        foreach (var entity in Wires.EnumerateWithEntities())
-            entities.Add(entity);
-        return entities.ToArray();
     }
 
     private void RemoveWireNodes(Wire wire)
@@ -1099,12 +1118,6 @@ public class Simulation
             );
         }
     }
-}
-
-public sealed class SimulationComment(Point position, string text = "")
-{
-    public Point Position { get; set; } = position;
-    public string Text { get; set; } = text;
 }
 
 internal sealed record SimulationSnapshot(ComponentSnapshot[] Components, WireSnapshot[] Wires, CommentSnapshot[] Comments);

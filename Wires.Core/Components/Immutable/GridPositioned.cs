@@ -2,7 +2,7 @@
 
 namespace Wires.Core.Sim.Components;
 
-internal readonly struct GridPositioned(Point pos)
+internal struct GridPositioned(Point pos)
 {
-    public readonly Point Position = pos;
+    public Point Position = pos;
 }

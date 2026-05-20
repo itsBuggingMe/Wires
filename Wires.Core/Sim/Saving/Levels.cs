@@ -14,6 +14,7 @@ using System.Runtime.InteropServices.Marshalling;
 using System.Text;
 using System.Text.Json;
 using System.Web;
+using Wires.Core;
 using Wires.Core.Components.Stateful;
 using Wires.Core.Sim.Components;
 
@@ -353,7 +354,7 @@ internal static class Levels
 
             foreach (var comment in model.Comments)
             {
-                simulation.Comments.Add(new SimulationComment(new(comment.X, comment.Y), comment.Text));
+                simulation.CreateComment(new(comment.X, comment.Y), comment.Text);
             }
         }
 
@@ -369,7 +370,7 @@ internal static class Levels
                 GridHeight = c.Custom!.Height,
                 Name = c.Name,
                 Components = c.Custom!.Components
-                    .ToArray()
+                    .ToEnumerable()
                     .Select(e => e.Get<ComponentData>())
                     .Select(c => new ComponentModel
                     {
@@ -399,7 +400,7 @@ internal static class Levels
                         Outputs = i.Output.Select(c => (int)c.Values).ToArray(),
                     }).ToArray() ?? [],
                 Wires = c.Custom!.Wires
-                    .ToArray()
+                    .ToEnumerable()
                     .Select(e => e.Get<Wire>())
                     .Select(w => new WireModel
                     {
@@ -410,12 +411,17 @@ internal static class Levels
                         IsBundle = w.Kind == WireKind.Byte,
                     })
                     .ToArray(),
-                Comments = c.Custom!.Comments
-                    .Select(comment => new CommentModel
+                Comments = c.Custom!.Comments.ToEnumerable()
+                    .Select(comment =>
                     {
-                        X = comment.Position.X,
-                        Y = comment.Position.Y,
-                        Text = comment.Text,
+                        GridPositioned position = comment.Get<GridPositioned>();
+                        CommentText text = comment.Get<CommentText>();
+                        return new CommentModel
+                    {
+                        X = position.Position.X,
+                        Y = position.Position.Y,
+                        Text = text.Text,
+                    };
                     })
                     .ToArray(),
             })
@@ -425,16 +431,4 @@ internal static class Levels
     }
 
     public static IEnumerable<ComponentEntry> LoadLevels(List<ComponentEntry> existingEntries) => throw new NotSupportedException();
-
-    public static Entity[] ToArray(this Frent.Systems.Query query)
-    {
-        List<Entity> e = new List<Entity>();
-
-        foreach (var entry in query.EnumerateWithEntities())
-        {
-            e.Add(entry);
-        }
-
-        return e.ToArray();
-    }
 }
