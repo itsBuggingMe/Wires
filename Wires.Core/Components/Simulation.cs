@@ -5,6 +5,7 @@ using Frent.Systems;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 using Paper.Core;
+using Paper.Core.Editor;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -108,6 +109,9 @@ public class Simulation
                 continue;
             }
 
+
+            componentData.Blueprint.InputBufferRaw.AsSpan().Clear();
+
             if (componentData.Blueprint.StepStateful(state, GlobalStateTable.CreateAddress(previousAddressHash, componentData.Position)) is TickResult.Error stepError)
             {
                 initialError = new TickResult.InnerError(tuple.Entity, stepError);
@@ -197,6 +201,7 @@ public class Simulation
                         | PowerStateAt(component.GetInputPosition(3)).Values);
 
                     var output = state.TickRam(
+                        GlobalStateTable.CreateAddress(previousAddressHash, component.Position),
                         PowerStateAt(component.GetInputPosition(0)),
                         PowerStateAt(component.GetInputPosition(1)),
                         combinedAddress

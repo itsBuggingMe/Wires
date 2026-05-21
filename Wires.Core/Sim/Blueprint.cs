@@ -6,8 +6,6 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework.Input;
-using Wires.Core;
 using Paper.Core;
 using System.Collections.Generic;
 
@@ -165,7 +163,10 @@ public class Blueprint
             if (e is TickResult.Error error)
                 return error;
             if (++iter > MaxIterations)
+            {
+                throw new Exception();
                 return new TickResult.Timeout();
+            }
         }
 
         return TickResult.SuccessInstance;
