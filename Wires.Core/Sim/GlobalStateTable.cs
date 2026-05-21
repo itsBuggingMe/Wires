@@ -30,7 +30,9 @@ public class GlobalStateTable
 
         int j = 0;
 
-        WriteSeq(0b0000010);
+        WriteSeq(0b00101010);
+        WriteSeq(0b10000000);
+        WriteSeq(0b00000000);
         WriteSeq(0b01110110);   // HLT
 
         WriteSeq(0b00_000_110); // MOV B, 69
